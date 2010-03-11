@@ -1,0 +1,190 @@
+
+Resynthesizer
+=============
+
+Resynthesizer is a GIMP plug-in with many uses:
+
+- Generating a more of a texture
+
+    Given a sample of a particular texture, produce a larger version of that
+    texture.
+
+- Making tilable images
+
+    Given a sample of a particular texture, produce a tilable version of that
+    texture.
+
+- Removing unwanted features from an image
+
+    If there is some unwanted feature in an image (such as a discoloration or a
+    political ally who has fallen out of public favour), Resynthesizer can
+    remove it by extending the surrounding texture over the top of it.
+
+- Applying themes to images
+
+    Given a sample texture (for example watercolor brushstrokes), another image
+    can be given that texture while retaining its overall structure.  This
+    might be used to make an image look as if it had been painted.  This
+    feature acts somewhat like a generic effects plug-in. Given a sample of an
+    effect, that effect can be applied to an image.
+
+
+
+Installation
+============
+
+Type:
+
+    make
+    make install
+
+
+Usage
+=====
+
+This plug-in installs itself in the Filters/Map menu as "Resynthesize".  It
+generates a texture based on a sample image of the texture. The result can be
+made to fit the boundary pixels of a region, or to have a specified arrangement
+of features.
+
+Options:
+
+  - Texture source
+      This can be used to select the image to take the texture from.  Any
+      selected regions in this image will *not* be included in the analysis of
+      this texture.
+
+  - Make horizontally tilable
+  - Make vertically tilable
+      Should the output be tilable, i.e. wrap around at the edges ?
+
+  - Fit output to bordering pixels
+      If this option is checked and there is a selection, Resynthesizer will
+      try to match its output to pixels surrounding the selection.
+
+  - Texture transfer
+      If this option is set a pair of images (maps), one for the texture source
+      and one for the output, will be used to guide placement of features of
+      the texture in the output.
+
+      The input and output maps should have the same mode (greyscale or RGB).
+      They should have the same size as the texture source and output image
+      respectively.  Resynthesizer will try to select features from the texture
+      source having similarly colored pixels in the input map as the
+      corresponding pixels in the output map.
+
+      Adjust the map importance slider to specify how slavishly Resynthesizer
+      should follow these maps.
+
+
+
+Also included in this package are some scripts that use Resynthesizer:
+
+  Filters/Enhance/Smart enlarge
+  Filters/Enhance/Smart sharpen
+  Filters/Enhance/Smart remove selection
+
+
+Authors
+=======
+
+Resynthesizer was written by Paul Harrison (pfh@logarithmic.net).
+
+In previous versions: David Rodríguez García (darodga@mail.ono.es)
+added the "update" button in the preview dialog-box. Laurent Despeyroux
+(laurent.despeyroux@free.fr) made some optimizations and most of the
+changes of the version 0.7. Ali Akcaagac updated Resynthesizer to work
+with Gimp 1.3. Albert Kahalan made some significant optimizations to
+the code.
+
+Feedback welcome.
+
+
+Resynthesizer is released under the terms of the GNU General Public License
+(see the file "COPYING").
+
+
+Change log
+==========
+
+0.16
+
+* Use "gimptool-2.0" rather than "gimptool"
+* Move scripts to Filters menu
+
+0.15
+
+* Compatability with GIMP 2.3 in smart-remove.scm (patches by Bryan Donlan)
+
+0.14
+
+* Two new parameters: neighbourhood size, thoroughness of search
+
+0.13
+
+* New robust goodness-of-fit metric, based on Cauchy distribution
+* "Sensitivity to outliers" slider added
+
+0.12
+
+* Almost entirely new algorithm
+* Orders of magnitude faster
+
+0.11
+
+* Optimizations by Albert Kahalan
+
+0.10
+
+* Added refinement pass/passes
+* Removed MML stuff (replaced by the number 3)
+* Bug fixes, code simplification
+
+0.9
+
+* Improved algorithm (L2 norm, better pixel prioritization scheme)
+* Updated to work with Gimp 2.0
+
+0.8
+
+* Updated to work with Gimp 1.3
+
+0.7:
+
+* internationalization (and French version)
+* optimizations (theoretical)
+* comments added to code
+* preview window bigger
+* « update » button in the preview dialog-box
+* more messages during calculation
+
+0.6:
+
+* updated stuff to not use compatibility cruft in libgimp
+
+0.5:
+
+* ported to C,
+* loosing what little readability the code had to begin with in the process
+* included some script-fu utilities that use resynthesizer
+
+0.4:
+
+* fixed bug selecting which pixels to use with semi-transparent masks
+* fixed out-by-one bug in partition code
+
+0.3:
+
+* fixed sqrt of negative number problem in Entropy_accumulator
+* fixed bug that was stuffing up map importance parameter
+* repeat-last mode now works properly
+
+0.2:
+
+* workaround for strange (presumably) compiler bug involving gimp_message and
+  the ?: operator
+
+0.1:
+
+* initial release
+
