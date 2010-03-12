@@ -225,33 +225,33 @@ struct Parameters {
 };
 
 
-    static inline bool wrap_or_clip(Parameters &parameters, Bitmap<Pixelel> &image, Coordinates &point) { 
-        while(point.x < 0)
-            if (parameters.h_tile)
-                point.x += image.width;
-            else
-                return false;
+static inline bool wrap_or_clip(Parameters &parameters, Bitmap<Pixelel> &image, Coordinates &point) { 
+    while(point.x < 0)
+        if (parameters.h_tile)
+            point.x += image.width;
+        else
+            return false;
 
-        while(point.x >= image.width)
-            if (parameters.h_tile)
-                point.x -= image.width;
-            else
-                return false;
+    while(point.x >= image.width)
+        if (parameters.h_tile)
+            point.x -= image.width;
+        else
+            return false;
 
-        while(point.y < 0)
-            if (parameters.v_tile)
-                point.y += image.height;
-            else
-                return false;
+    while(point.y < 0)
+        if (parameters.v_tile)
+            point.y += image.height;
+        else
+            return false;
 
-        while(point.y >= image.height)
-            if (parameters.v_tile)
-                point.y -= image.height;
-            else
-                return false;
+    while(point.y >= image.height)
+        if (parameters.v_tile)
+            point.y -= image.height;
+        else
+            return false;
 
-        return true;
-    }
+    return true;
+}
 
 /*****************/
 /*****************/
@@ -659,9 +659,9 @@ static Bitmap<Status> status;
 // it can contain duplicates, which mean points re-analysis
 static vector<Coordinates> data_points, corpus_points, sorted_offsets;
 
-static Coordinates neighbours[max_neighbours];
+static vector<Coordinates> neighbour_offsets(0);
 static Pixelel neighbour_values[max_neighbours][8];
-static Status *neighbour_statuses[max_neighbours];
+static vector<Status*> neighbour_statuses(0);
 static int n_neighbours;
 
 static int best;
@@ -685,8 +685,8 @@ static void make_offset_list(void) {
 static int get_metric(const Coordinates& point, int best_so_far)
 {
     int sum = 0;
-    for(int i=0;i<n_neighbours;i++) {
-        Coordinates off_point = point + neighbours[i];
+    for(int i=neighbour_offsets.size()-1; i>=0; --i) {
+        Coordinates off_point = point + neighbour_offsets[i];
         if (off_point.x < 0 || off_point.y < 0 || 
                 off_point.x >= corpus.width || off_point.y >= corpus.height ||
                 !*corpus_mask.at(off_point)) {
@@ -707,6 +707,35 @@ static int get_metric(const Coordinates& point, int best_so_far)
     }
     return sum;
 }
+
+/*
+// L1 (SAD) metric
+static int get_metric(const Coordinates& point, int best_so_far)
+{
+    int sum = 0;
+    for(int i=0; i<n_neighbours; ++i) {
+        Coordinates off_point = point + neighbour_offsets[i];
+        if (off_point.x < 0 || off_point.y < 0 || 
+                off_point.x >= corpus.width || off_point.y >= corpus.height ||
+                !*corpus_mask.at(off_point)) {
+            sum += 255*input_bytes + 255*map_bytes;
+        } else {
+            const Pixelel *corpus_pixel = corpus.at(off_point),
+                          *data_pixel   = neighbour_values[i];
+            if (i)
+                for(int j=0;j<input_bytes;j++)
+                    sum += abs(data_pixel[j] - corpus_pixel[j]);
+            if (input_bytes != bytes)
+                for(int j=input_bytes;j<bytes;j++)
+                    sum += abs(data_pixel[j] - corpus_pixel[j]);
+        }
+
+        if (sum >= best_so_far)
+            return sum;
+    }
+    return sum;
+}
+*/
 
 static inline void try_point(const Coordinates &point)
 {
@@ -901,9 +930,9 @@ static void run(const gchar *name,
     /* Setup */
 
     FILE* logfile = fopen("/home/ethercrow/tmp/resynth.log", "wt");
-    int64_t perf_preparing_data_points = 0;
-    int64_t perf_populating_neighbours = 0;
-    int64_t perf_doin_it_right = 0;
+    int64_t perf_neighbour_search      = 0;
+    int64_t perf_refinement            = 0;
+    int64_t perf_doin_it_right         = 0;
     struct timespec perf_tmp;
 
     make_offset_list();
@@ -914,10 +943,6 @@ static void run(const gchar *name,
         diff_table[256+i] = int(value);
         map_diff_table[256+i] = int(i*i*parameters.map_weight*4.0);
     }
-
-    clock_gettime(CLOCK_REALTIME, &perf_tmp);
-    perf_preparing_data_points -= perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
-
 
     vector<Coordinates>::iterator refinement_begins_here = data_points.end();
 
@@ -935,11 +960,6 @@ static void run(const gchar *name,
     std::random_shuffle(data_points.begin(), refinement_begins_here);
     std::random_shuffle(refinement_begins_here, data_points.end());
 
-    clock_gettime(CLOCK_REALTIME, &perf_tmp);
-    perf_preparing_data_points += perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
-
-    fprintf(logfile, "preparing data_points took %lld nsec\n", perf_preparing_data_points);
-
     /* Do it */
 
     Bitmap<int> tried;
@@ -950,12 +970,11 @@ static void run(const gchar *name,
     int total_points = data_points.size();
     int points_to_go = total_points;
     vector<int> previous_pass(0);
-    fprintf(logfile, "foo\n");
     while (points_to_go) {
         int data_points_size = data_points.size();
         for(int i=0; points_to_go && i < data_points_size; ++i) {
-
-            fprintf(logfile, "\n1");
+            //fprintf(logfile, "\n1 %d ", points_to_go);
+            //fflush(logfile);
             Coordinates position = data_points[i];
 
             // continue if we are far from the boundaries
@@ -968,55 +987,97 @@ static void run(const gchar *name,
             if (island_flag)
                 continue;
 
+            //fprintf(logfile, "2");
+            //fflush(logfile);
+
             if ((points_to_go&1023) == 0)
                 gimp_progress_update(1.0-float(points_to_go)/total_points);
 
+            best = 1<<30;
 
-            fprintf(logfile, "2");
-            clock_gettime(CLOCK_REALTIME, &perf_tmp);
-            perf_populating_neighbours -= perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
+            ///////////////////////////
+            // Neighbour search BEGIN
+            ///////////////////////////
 
+
+            neighbour_offsets.clear();
+            //neighbour_statuses.clear();
             n_neighbours = 0;
             const int sorted_offsets_size = sorted_offsets.size();
+
             for(int j=0;j<sorted_offsets_size;j++) {
                 Coordinates point = position + sorted_offsets[j];
+                //fprintf(logfile, "a");
+                //fflush(logfile);
 
                 if (wrap_or_clip(parameters, data, point) && 
-                        status.at(point)->has_value) {
-                    neighbours[n_neighbours] = sorted_offsets[j];
-                    neighbour_statuses[n_neighbours] = status.at(point);
+                        status.at(point)->has_value)
+                {
+                    //fprintf(logfile, "b");
+                    //fflush(logfile);
+                    neighbour_offsets.push_back(sorted_offsets[j]);
+                    //neighbour_statuses.push_back(status.at(point));
+                    //fprintf(logfile, "c");
+                    //fflush(logfile);
                     for(int k=0;k<bytes;k++)
                         neighbour_values[n_neighbours][k] = data.at(point)[k];
+                    //fprintf(logfile, "d");
+                    //fflush(logfile);
                     n_neighbours++;
-                    if (n_neighbours >= parameters.neighbours) break;
+                    if (neighbour_offsets.size() >= parameters.neighbours) break;
+                    //fprintf(logfile, "d");
+                    //fflush(logfile);
                 }
             }
 
-            fprintf(logfile, "3");
-            clock_gettime(CLOCK_REALTIME, &perf_tmp);
-            perf_populating_neighbours += perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
+            //fprintf(logfile, "3");
+            //fflush(logfile);
 
             clock_gettime(CLOCK_REALTIME, &perf_tmp);
-            perf_doin_it_right -= perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
+            perf_neighbour_search -= perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
 
-            best = 1<<30;
-
+            /*
             for(int j=0;j<n_neighbours && best != 0;j++)
                 if (neighbour_statuses[j]->has_source) {
-                    Coordinates point = neighbour_statuses[j]->source - neighbours[j];
+                    Coordinates point = neighbour_statuses[j]->source - neighbour_offsets[j];
                     if (point.x < 0 || point.y < 0 || point.x >= corpus.width || point.y >= corpus.height) continue;
                     if (!corpus_mask.at(point)[0] || tried.at(point)[0] == i) continue;
                     try_point(point);
                     tried.at(point)[0] = i;
                 }
 
-            fprintf(logfile, "4");
+            */   
+
+            clock_gettime(CLOCK_REALTIME, &perf_tmp);
+            perf_neighbour_search += perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
+
+
+            ///////////////////////////
+            // Neighbour search END
+            ///////////////////////////
+           
+            //fprintf(logfile, "4");
+            //fflush(logfile);
+
+            ///////////////////////////
+            // Random refinement BEGIN
+            ///////////////////////////
+
+            clock_gettime(CLOCK_REALTIME, &perf_tmp);
+            perf_refinement -= perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
+
             for(int j=0;j<parameters.trys && best != 0;j++)
                 try_point(corpus_points[rand()%corpus_points.size()]);
 
-            fprintf(logfile, "5");
             clock_gettime(CLOCK_REALTIME, &perf_tmp);
-            perf_doin_it_right += perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
+            perf_refinement += perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
+
+            ///////////////////////////
+            // Random refinement END 
+            ///////////////////////////
+            
+            //fprintf(logfile, "5");
+            //fflush(logfile);
 
             // transfer patch
             for (int ox=-2; ox<=2; ++ox) {
@@ -1031,9 +1092,11 @@ static void run(const gchar *name,
                 }
             }
 
-            fprintf(logfile, "6");
+            //fprintf(logfile, "6");
+            //fflush(logfile);
+
             /*
-            // copy single pixel
+            // transfer single pixel
             for(int j=0;j<input_bytes;j++)
                 data.at(position)[j] = corpus.at(best_point)[j];
             status.at(position)->has_source = true;
@@ -1043,16 +1106,21 @@ static void run(const gchar *name,
             --points_to_go;
             previous_pass.push_back(i);
         }
+        //fprintf(logfile, "7");
+        //fflush(logfile);
         for (int j = previous_pass.size() - 1; j >= 0; --j) {
             status.at(data_points[previous_pass[j]])->has_value = true;
             data_points.erase(data_points.begin()+previous_pass[j]);
         }
+        //fprintf(logfile, "8");
+        //fflush(logfile);
         if (previous_pass.empty())
             break;
         previous_pass.clear();
     }
 
-    fprintf(logfile, "populating neighbours took %lld nsec\n", perf_populating_neighbours);
+    fprintf(logfile, "neighbour search took %lld nsec\n", perf_neighbour_search);
+    fprintf(logfile, "refinement took %lld nsec\n", perf_refinement);
     fprintf(logfile, "doin it right took %lld nsec\n", perf_doin_it_right);
     fclose(logfile);
 
