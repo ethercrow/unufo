@@ -29,6 +29,7 @@
 #include <gtk/gtk.h>
 
 #include <vector>
+#include <utility>
 #include <algorithm>
 
 using namespace std;
@@ -53,8 +54,10 @@ static int input_bytes, map_bytes, map_pos, bytes;
 
 // corpus origin is shifted from image origin by (corpus_xoff, corpus_yoff)
 
-static Bitmap<Pixelel> data, corpus, corpus_mask;
+        
+static Bitmap<Pixelel> data, data_mask, corpus, corpus_mask;
 static Bitmap<Status> data_status;
+static int sel_x1, sel_y1, sel_x2, sel_y2;
 static int corpus_xoff, corpus_yoff;
 
 // data_points is a queue of points to be filled,
@@ -64,13 +67,6 @@ static int corpus_xoff, corpus_yoff;
 // and sorted by distance from origin (see Coordinates::operator< for 
 // current definition of 'distance')
 static vector<Coordinates> data_points, sorted_offsets;
-
-// neighbour_offsets is subset of sorted_offsets
-// it contains only those offsets which lead to 
-// already defined points
-static vector<Coordinates> neighbour_offsets(0);
-static Pixelel neighbour_values[max_neighbours][8];
-static vector<Status> neighbour_statuses(0);
 
 static int best;
 static Coordinates best_point;
@@ -82,8 +78,8 @@ static double neglog_cauchy(double x) {
 static void make_offset_list(void) {
     sorted_offsets.resize(0);
     int half_side = sqrt(max_neighbours);
-    for(int y=-half_side; y<half_side; ++y)
-        for(int x=-half_side; x<half_side; ++x)
+    for(int y=-half_side-1; y<half_side+1; ++y)
+        for(int x=-half_side-1; x<half_side+1; ++x)
             sorted_offsets.push_back(Coordinates(x,y));
 
     sort(sorted_offsets.begin(), sorted_offsets.end());
@@ -92,47 +88,76 @@ static void make_offset_list(void) {
 static void setup_metric(float autism, float map_weight)
 {
     for(int i=-256;i<256;i++) {
-        double value = neglog_cauchy(i/256.0/autism) 
-            / neglog_cauchy(1.0/autism) * 65536.0;
-        diff_table[256+i] = int(value);
+        //double value = neglog_cauchy(i/256.0/autism) / neglog_cauchy(1.0/autism) * 65536.0;
+        //diff_table[256+i] = int(value);
+        diff_table[256+i] = i*i;
         map_diff_table[256+i] = int(i*i*map_weight*4.0);
     }
 }
 
-static int get_metric(const Coordinates& point, int best_so_far)
+// structural complexity of point's neighbourhood
+static int get_complexity(const Coordinates& point)
 {
-    int sum = 0;
-    for(int i=neighbour_offsets.size()-1; i>=0; --i) {
-        Coordinates off_point = point + neighbour_offsets[i];
-        if (off_point.x < 0 || off_point.y < 0 ||
-            off_point.x >= corpus.width || off_point.y >= corpus.height ||
-            !corpus_mask.at(off_point)[0])
-        {
-            sum += diff_table[0]*input_bytes + map_diff_table[0]*map_bytes;
-        } else {
-            const Pixelel *corpus_pixel = corpus.at(off_point),
-                  *data_pixel = neighbour_values[i];
-            if (i)
-                for(int j=0;j<input_bytes;j++)
-                    sum += diff_table[256u + data_pixel[j] - corpus_pixel[j]];
-            if (input_bytes != bytes)
-                for(int j=input_bytes;j<bytes;j++)
-                    sum += map_diff_table[256u + data_pixel[j] - corpus_pixel[j]];
-        }
-
-        if (sum >= best_so_far)
-            return sum;
+    char max_values[input_bytes];
+    char min_values[input_bytes];
+    for (int j = 0; j<input_bytes; ++j) {
+        max_values[j] = 0;
+        min_values[j] = 255;
     }
-    return sum;
+    for (int ox=-comp_patch_radius; ox<=comp_patch_radius; ++ox)
+        for (int oy=-comp_patch_radius; oy<=comp_patch_radius; ++oy) {
+            Coordinates point_off = point + Coordinates(ox, oy);
+            if (data_status.at(point_off)->confidence)
+                for (int j = 0; j<input_bytes; ++j) {
+                    char c = data.at(point_off)[j];
+                    if (c > max_values[j])
+                        max_values[j] = c;
+                    if (c < min_values[j])
+                        min_values[j] = c;
+                }
+        }
+    int result = 0;
+    for (int j = 0; j<input_bytes; ++j)
+        result += max_values[j] - min_values[j];
+    return result;
 }
 
-static inline void try_point(const Coordinates &point)
+static int get_difference(const Coordinates& candidate, const Coordinates& position)
 {
-    int difference = get_metric(point, best);
+    int sum = 0;
+    int compared_count = 0;
+    for (int ox=-comp_patch_radius; ox<=comp_patch_radius; ++ox)
+        for (int oy=-comp_patch_radius; oy<=comp_patch_radius; ++oy) {
+            // TODO: consider mirroring and rotation
+            Coordinates off = Coordinates(ox, oy);
+            Coordinates candidate_off = candidate + off;
+            Coordinates position_off  = position  + off;
+            if (data_status.at(candidate_off)->confidence && 
+                data_status.at(position_off)->confidence)
+            {
+                ++compared_count;
+                for(int j=0;j<input_bytes;j++) {
+                    int d = (data.at(position_off)[j] - data.at(candidate_off)[j]);
+                    sum += diff_table[256 + d];
+                }
+            }  else if (!data_status.at(candidate_off)->confidence)
+            {
+                sum += diff_table[0];
+            }
+        }
+    if (compared_count)
+        return sum;
+    else
+        return best+1;
+}
+
+static inline void try_point(const Coordinates& candidate, const Coordinates& position)
+{
+    int difference = get_difference(candidate, position);
     if (best < difference)
         return;
     best = difference;
-    best_point = point;
+    best_point = candidate;
 }
 
 
@@ -263,9 +288,7 @@ static void run(const gchar *name,
 
     /* Fetch the whole image data */
     {
-        Bitmap<Pixelel> data_mask;
-        int data_xoff, data_yoff;
-        fetch_image_and_mask(drawable, data, bytes, data_mask, 255, data_xoff, data_yoff);
+        fetch_image_and_mask(drawable, data, bytes, data_mask, 255, sel_x1, sel_y1, sel_x2, sel_y2);
 
         if (with_map) {
             data.from_drawable(map_out_drawable, 0, 0, map_pos);
@@ -277,11 +300,10 @@ static void run(const gchar *name,
 
         for(int y=0;y<data_status.height;y++)
             for(int x=0;x<data_status.width;x++) {
-                data_status.at(x,y)[0].has_source = false;
-                data_status.at(x,y)[0].has_value = false;
+                data_status.at(x,y)->confidence = 0;
 
                 if (parameters.use_border && data_mask.at(x,y)[0] == 0) {
-                    data_status.at(x,y)->has_value  = true;
+                    data_status.at(x,y)->confidence = 255;
                 }
 
                 if (data_mask.at(x,y)[0] != 0)
@@ -291,20 +313,21 @@ static void run(const gchar *name,
 
     /* Fetch the corpus */
 
-    fetch_image_and_mask(corpus_drawable, corpus, bytes, corpus_mask, 0, corpus_xoff, corpus_yoff);
+    fetch_image_and_mask(corpus_drawable, corpus, bytes, corpus_mask, 0);
 
     if (with_map) {
         corpus.from_drawable(map_in_drawable, 0, 0, map_pos);
     }
 
+    /* there's some weird convention about corpus selection inversion. For now. */
     for(int y=0;y<corpus.height;y++)
-        for(int x=0;x<corpus.width;x++) {
+        for(int x=0;x<corpus.width;x++)
             corpus_mask.at(x,y)[0] = 255 - corpus_mask.at(x,y)[0];
-            if (corpus_mask.at(x,y)[0]) {
-                data_status.at(x+corpus_xoff, y+corpus_yoff)->has_source = true;
-                data_status.at(x+corpus_xoff, y+corpus_yoff)->source     = Coordinates(x, y);
-            }
-        }
+
+    /* little geometry so that sel_x1 and sel_y1 are now corpus_offset */
+
+    sel_x1 -= (corpus.width  - (sel_x2-sel_x1))/2;
+    sel_y1 -= (corpus.height - (sel_y2-sel_y1))/2;
 
     /* Sanity check */
 
@@ -312,8 +335,7 @@ static void run(const gchar *name,
         gimp_message("The output image is too small.");
         values[0].data.d_status = GIMP_PDB_EXECUTION_ERROR;
         return;
-    }
-
+    } 
     /* Setup */
 
     FILE* logfile = fopen("/home/ethercrow/tmp/resynth.log", "wt");
@@ -326,9 +348,9 @@ static void run(const gchar *name,
 
     setup_metric(parameters.autism, parameters.map_weight);
 
+    /*
     vector<Coordinates>::iterator refinement_begins_here = data_points.end();
 
-    /*
     // this forces some data_points to be reconsidered
     // after all has been mapped
     for(int n=data_points.size();n>0;) {
@@ -342,21 +364,14 @@ static void run(const gchar *name,
 
     std::random_shuffle(data_points.begin(), refinement_begins_here);
     std::random_shuffle(refinement_begins_here, data_points.end());
-
     */
 
     /* Do it */
 
     fprintf(logfile, "status  dimensions: (%d, %d)\n", data_status.width, data_status.height);
     fprintf(logfile, "data dimensions: (%d, %d)\n", data.width, data.height);
-    fprintf(logfile, "corpus dimensions: (%d, %d, %d, %d)\n", corpus_xoff, corpus_yoff, corpus.width, corpus.height);
-    fprintf(logfile, "Do it\n");
+    fprintf(logfile, "corpus dimensions: (%d, %d, %d, %d)\n", sel_x1, sel_y1, corpus.width, corpus.height);
     fflush(logfile);
-
-    //Bitmap<int> tried;
-    //tried.size(corpus.width,corpus.height,1);
-    //for(int i=0;i<corpus.width*corpus.height;i++)
-    //    tried.data[i] = -1;
 
     int total_points = data_points.size();
     int points_to_go = total_points;
@@ -367,27 +382,42 @@ static void run(const gchar *name,
 
         // fill edge_points with points that are near already filled points
         // that ensures inward propagation
-        vector<Coordinates> edge_points(0);
+        // first element in pair is complexity of point neighbourhood
+        vector<pair<int, Coordinates> > edge_points(0);
         for(int i=0; i < data_points.size(); ++i) {
             Coordinates position = data_points[i];
+
+            // check if this point has been already set by some patch
+            if (data_status.at(position)->confidence) {
+                data_points.erase(data_points.begin() + i--);
+                --points_to_go;
+                continue;
+            }
+
             bool island_flag = true;
             for (int ox=-1; ox<=1; ++ox)
                 for (int oy=-1; oy<=1; ++oy)
-                    if (data_status.at(position + Coordinates(ox, oy))->has_value)
+                    if (data_status.at(position + Coordinates(ox, oy))->confidence)
                         island_flag = false;
             if (!island_flag) {
-                edge_points.push_back(data_points[i]);
+                edge_points.push_back(std::make_pair(get_complexity(data_points[i]),
+                    data_points[i]));
                 data_points.erase(data_points.begin() + i--);
             }
         }
-        random_shuffle(edge_points.begin(), edge_points.end());
+        sort(edge_points.begin(), edge_points.end());
         int edge_points_size = edge_points.size();
 
-        // cover edge points with best-fit patches
+        vector<Coordinates> edge_results(0);
+
+        // find best-fit patches for edge_points
         for(int i=0; i < edge_points_size; ++i) {
-            fprintf(logfile, "\n1");
-            fflush(logfile);
-            Coordinates position = edge_points[i];
+            //fprintf(logfile, "\n1");
+            //fflush(logfile);
+            Coordinates position = edge_points[i].second;
+            --points_to_go;
+            if (data_status.at(position)->confidence)
+                continue;
 
             //fprintf(logfile, "2");
             //fflush(logfile);
@@ -397,43 +427,25 @@ static void run(const gchar *name,
             ///////////////////////////
             // Neighbour search BEGIN
             ///////////////////////////
+            
+            clock_gettime(CLOCK_REALTIME, &perf_tmp);
+            perf_neighbour_search -= perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
 
-            neighbour_offsets.clear();
-            neighbour_statuses.clear();
             int n_neighbours = 0;
             const int sorted_offsets_size = sorted_offsets.size();
 
             for(int j=0;j<sorted_offsets_size;j++) {
-                Coordinates point = position + sorted_offsets[j];
-                if (wrap_or_clip(parameters, data, point) && 
-                        data_status.at(point)->has_source)
+                Coordinates candidate = position + sorted_offsets[j];
+                if (wrap_or_clip(parameters, data, candidate) && 
+                        data_status.at(candidate)->confidence)
                 {
-                    neighbour_offsets.push_back(sorted_offsets[j]);
-                    neighbour_statuses.push_back(*(data_status.at(point)));
-                    for(int k=0;k<bytes;k++)
-                        neighbour_values[n_neighbours][k] = data.at(point)[k];
-                    n_neighbours++;
-                    if (neighbour_offsets.size() >= parameters.neighbours) break;
-                }
-            }
-
-            clock_gettime(CLOCK_REALTIME, &perf_tmp);
-            perf_neighbour_search -= perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
-
-            for(int j=neighbour_offsets.size() - 1; j>=0 && best != 0; --j) {
-                Coordinates point = neighbour_statuses[j].source - neighbour_offsets[j];
-                if (neighbour_statuses[j].has_source) {
-                    if (point.x < 0 || point.y < 0 || point.x >= corpus.width || point.y >= corpus.height) continue;
-                    if (!corpus_mask.at(point)[0]) continue;
-                    //if(tried.at(point)[0] == points_to_go) continue;
-                    try_point(point);
-                    //tried.at(point)[0] = points_to_go;
+                    try_point(candidate, position);
+                    if (++n_neighbours >= parameters.neighbours) break;
                 }
             }
 
             clock_gettime(CLOCK_REALTIME, &perf_tmp);
             perf_neighbour_search += perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
-
 
             ///////////////////////////
             // Neighbour search END
@@ -449,6 +461,16 @@ static void run(const gchar *name,
             clock_gettime(CLOCK_REALTIME, &perf_tmp);
             perf_refinement -= perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
 
+            for (int j=0; j<parameters.trys; ++j) {
+                int x, y;
+                // FIXME: this will suck with large rectangular selections with small borders
+                do {
+                    x = sel_x1 + rand()%corpus.width;
+                    y = sel_y1 + rand()%corpus.height;
+                } while (data_mask.at(x,y)[0]);
+                try_point(position + Coordinates(x, y), position);
+            }
+
             clock_gettime(CLOCK_REALTIME, &perf_tmp);
             perf_refinement += perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
 
@@ -459,40 +481,36 @@ static void run(const gchar *name,
             //fprintf(logfile, "5");
             //fflush(logfile);
 
-            /*
-            // transfer patch
-            for (int ox=-1; ox<=1; ++ox) {
-                for (int oy=-1; oy<=1; ++oy) {
+            //edge_results.push_back(best_point);
+            for (int ox=-transfer_patch_radius; ox<=transfer_patch_radius; ++ox) {
+                for (int oy=-transfer_patch_radius; oy<=transfer_patch_radius; ++oy) {
                     Coordinates offset(ox, oy);
-                    Coordinates near_pos  = position + offset;
-                    Coordinates near_best = best_point + offset;
-                    for(int j=0;j<input_bytes;j++)
-                        data.at(near_pos)[j] = corpus.at(near_best)[j];
-                    status.at(near_pos)->has_source = true;
-                    status.at(near_pos)->source = near_best;
+                    Coordinates near_dst = position + offset;
+                    Coordinates near_src = best_point + offset;
+                    // transfer only defined points and only to undefined points
+                    if (!(data_status.at(near_dst)->confidence) &&
+                        data_status.at(near_src)->confidence)
+                    {
+                        for(int j=0;j<input_bytes;j++)
+                            data.at(near_dst)[j] = data.at(near_src)[j];
+                        data_status.at(near_dst)->confidence = 255; // FIXME: assign proper confidence
+                    }
                 }
             }
-            */
-
-            // transfer single pixel
-            for(int j=0;j<input_bytes;j++)
-                data.at(position)[j] = corpus.at(best_point)[j];
-            data_status.at(position)->has_source = true;
-            data_status.at(position)->has_value  = true;
-            data_status.at(position)->source     = best_point;
 
             //fprintf(logfile, "6");
             //fflush(logfile);
 
-            --points_to_go;
         }
+
         if (!edge_points_size)
             break;
         //fprintf(logfile, "6");
         //fflush(logfile);
     }
 
-    fprintf(logfile, "\nneighbour search took %lld usec\n", perf_neighbour_search/1000);
+    fprintf(logfile, "\n%d points left unfilled", points_to_go);
+    fprintf(logfile, "neighbour search took %lld usec\n", perf_neighbour_search/1000);
     fprintf(logfile, "refinement took %lld usec\n", perf_refinement/1000);
     fclose(logfile);
 

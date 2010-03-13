@@ -14,9 +14,10 @@
 
 //Get a drawable and possibly its selection mask from the GIMP
 void fetch_image_and_mask(GimpDrawable *drawable, Bitmap<Pixelel> &image, int bytes, 
-        Bitmap<Pixelel> &mask, Pixelel default_mask_value, int& xoff, int& yoff)
+        Bitmap<Pixelel> &mask, Pixelel default_mask_value,
+        int& sel_x1, int& sel_y1, int& sel_x2, int& sel_y2)
 {
-    int x,y,x1,y1,x2,y2;
+    int x,y, xoff, yoff;
     Bitmap<Pixelel> temp_mask;
     int sel_id;
     int has_selection;
@@ -27,7 +28,8 @@ void fetch_image_and_mask(GimpDrawable *drawable, Bitmap<Pixelel> &image, int by
 
     image.from_drawable(drawable,0,0,0);
 
-    has_selection = gimp_drawable_mask_bounds(drawable->drawable_id,&x1,&y1,&x2,&y2);
+    has_selection = gimp_drawable_mask_bounds(drawable->drawable_id,
+            &sel_x1, &sel_y1, &sel_x2, &sel_y2);
     gimp_drawable_offsets(drawable->drawable_id, &xoff, &yoff);
 
     if (!has_selection) {
@@ -35,21 +37,29 @@ void fetch_image_and_mask(GimpDrawable *drawable, Bitmap<Pixelel> &image, int by
         return;
     }
 
-    temp_mask.size(x2-x1, y2-y1, 1);
+    temp_mask.size(sel_x2-sel_x1, sel_y2-sel_y1, 1);
 
     sel_id = gimp_image_get_selection(gimp_drawable_get_image(drawable->drawable_id));
     mask_drawable = gimp_drawable_get(sel_id);
 
 
-    temp_mask.from_drawable(mask_drawable, x1+xoff,y1+yoff, 0);
+    temp_mask.from_drawable(mask_drawable, sel_x1+xoff, sel_y1+yoff, 0);
 
     gimp_drawable_detach(mask_drawable);
 
     memset(mask.data, 0, mask.width*mask.height*sizeof(Pixelel));
     for(y=0;y<temp_mask.height;y++)
         for(x=0;x<temp_mask.width;x++)
-            mask.at(x+x1,y+y1)[0] = temp_mask.at(x,y)[0];
+            mask.at(x+sel_x1,y+sel_y1)[0] = temp_mask.at(x,y)[0];
 }
+
+void fetch_image_and_mask(GimpDrawable *drawable, Bitmap<Pixelel> &image, int bytes, 
+        Bitmap<Pixelel> &mask, Pixelel default_mask_value)
+{
+    int x1, y1, x2, y2;
+    fetch_image_and_mask(drawable, image, bytes, mask, default_mask_value, x1, y1, x2, y2);
+}
+
 
 /*****************/
 /*****************/

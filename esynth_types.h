@@ -25,8 +25,7 @@ typedef struct Coordinates {
 } Coordinates;
 
 struct Status {
-    bool has_value, has_source;
-    Coordinates source;
+    Pixelel confidence;
 };
 
 struct Parameters {
