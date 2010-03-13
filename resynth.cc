@@ -59,15 +59,11 @@ static int corpus_xoff, corpus_yoff;
 
 // data_points is a queue of points to be filled,
 // it can contain duplicates, which mean points re-analysis
-// corpus_points contains all points from corpus_mask subset of corpus
-//
-// WARNING: coordinates in data_points are relative to the whole image origin
-// and coordinates in corpus_points are relative to corpus origin
 //
 // sorted_offsets is an array of points near origin, beginning with (0,0)
 // and sorted by distance from origin (see Coordinates::operator< for 
 // current definition of 'distance')
-static vector<Coordinates> data_points, corpus_points, sorted_offsets;
+static vector<Coordinates> data_points, sorted_offsets;
 
 // neighbour_offsets is subset of sorted_offsets
 // it contains only those offsets which lead to 
@@ -84,11 +80,10 @@ static double neglog_cauchy(double x) {
 }
 
 static void make_offset_list(void) {
-    int width = (corpus.width<data.width?corpus.width:data.width);
-    int height = (corpus.height<data.height?corpus.height:data.height);
     sorted_offsets.resize(0);
-    for(int y=-height+1;y<height;y++)
-        for(int x=-width+1;x<width;x++)
+    int half_side = sqrt(max_neighbours);
+    for(int y=-half_side; y<half_side; ++y)
+        for(int x=-half_side; x<half_side; ++x)
             sorted_offsets.push_back(Coordinates(x,y));
 
     sort(sorted_offsets.begin(), sorted_offsets.end());
@@ -302,13 +297,10 @@ static void run(const gchar *name,
         corpus.from_drawable(map_in_drawable, 0, 0, map_pos);
     }
 
-    corpus_points.resize(0);
-
     for(int y=0;y<corpus.height;y++)
         for(int x=0;x<corpus.width;x++) {
             corpus_mask.at(x,y)[0] = 255 - corpus_mask.at(x,y)[0];
             if (corpus_mask.at(x,y)[0]) {
-                corpus_points.push_back(Coordinates(x,y));
                 data_status.at(x+corpus_xoff, y+corpus_yoff)->has_source = true;
                 data_status.at(x+corpus_xoff, y+corpus_yoff)->source     = Coordinates(x, y);
             }
@@ -316,12 +308,8 @@ static void run(const gchar *name,
 
     /* Sanity check */
 
-    if (!corpus_points.size() || !data_points.size()) {
-        if (!corpus_points.size())
-            gimp_message("The input texture is too small.");
-        else
-            gimp_message("The output image is too small.");
-
+    if (!data_points.size()) {
+        gimp_message("The output image is too small.");
         values[0].data.d_status = GIMP_PDB_EXECUTION_ERROR;
         return;
     }
@@ -410,7 +398,6 @@ static void run(const gchar *name,
             // Neighbour search BEGIN
             ///////////////////////////
 
-
             neighbour_offsets.clear();
             neighbour_statuses.clear();
             int n_neighbours = 0;
@@ -418,26 +405,15 @@ static void run(const gchar *name,
 
             for(int j=0;j<sorted_offsets_size;j++) {
                 Coordinates point = position + sorted_offsets[j];
-                //fprintf(logfile, "a");
-                //fflush(logfile);
-
                 if (wrap_or_clip(parameters, data, point) && 
                         data_status.at(point)->has_source)
                 {
-                    //fprintf(logfile, "b");
-                    //fflush(logfile);
                     neighbour_offsets.push_back(sorted_offsets[j]);
                     neighbour_statuses.push_back(*(data_status.at(point)));
-                    //fprintf(logfile, "c");
-                    //fflush(logfile);
                     for(int k=0;k<bytes;k++)
                         neighbour_values[n_neighbours][k] = data.at(point)[k];
-                    //fprintf(logfile, "d");
-                    //fflush(logfile);
                     n_neighbours++;
                     if (neighbour_offsets.size() >= parameters.neighbours) break;
-                    //fprintf(logfile, "d");
-                    //fflush(logfile);
                 }
             }
 
@@ -472,9 +448,6 @@ static void run(const gchar *name,
 
             clock_gettime(CLOCK_REALTIME, &perf_tmp);
             perf_refinement -= perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
-
-            for(int j=0;j<parameters.trys && best != 0;j++)
-                try_point(corpus_points[rand()%corpus_points.size()]);
 
             clock_gettime(CLOCK_REALTIME, &perf_tmp);
             perf_refinement += perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
