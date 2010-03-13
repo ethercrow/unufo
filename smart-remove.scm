@@ -102,8 +102,8 @@
         -1
         0.0
         0.117
-        81           ; neighbour count
-        500          ; number of additional tries
+        400                     ; neighbour count
+        0                     ; number of additional tries
       )
 
       (gimp-image-delete dupe)
