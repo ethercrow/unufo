@@ -468,7 +468,7 @@ static void run(const gchar *name,
                     x = sel_x1 + rand()%corpus.width;
                     y = sel_y1 + rand()%corpus.height;
                 } while (data_mask.at(x,y)[0]);
-                try_point(position + Coordinates(x, y), position);
+                try_point(Coordinates(x, y), position);
             }
 
             clock_gettime(CLOCK_REALTIME, &perf_tmp);
