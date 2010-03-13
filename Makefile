@@ -29,7 +29,7 @@ install: resynth smart-enlarge.scm smart-remove.scm
 	@echo "  * Filters/Enhance/Smart remove selection"
 	@echo
 
-resynth: resynth.cc
+resynth: resynth.cc *.h
 	$(CC) $(CFLAGS) -o $@ resynth.cc $(LDFLAGS)
 
 clean:
