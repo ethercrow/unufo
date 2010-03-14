@@ -364,7 +364,7 @@ static void run(const gchar *name,
     FILE* logfile = fopen("/tmp/resynth.log", "wt");
     int64_t perf_neighbour_search      = 0;
     int64_t perf_refinement            = 0;
-    int64_t perf_doin_it_right         = 0;
+    int64_t perf_edge_points           = 0;
     struct timespec perf_tmp;
 
     make_offset_list();
@@ -400,10 +400,14 @@ static void run(const gchar *name,
         gimp_progress_update(1.0-float(points_to_go)/total_points);
         //fprintf(logfile, "\n%d", points_to_go);
         //fflush(logfile);
+        
 
         // fill edge_points with points that are near already filled points
         // that ensures inward propagation
         // first element in pair is complexity of point neighbourhood
+        clock_gettime(CLOCK_REALTIME, &perf_tmp);
+        perf_edge_points -= perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
+
         vector<pair<int, Coordinates> > edge_points(0);
         for(int i=0; i < data_points.size(); ++i) {
             Coordinates position = data_points[i];
@@ -427,6 +431,9 @@ static void run(const gchar *name,
         }
         sort(edge_points.begin(), edge_points.end());
 
+        clock_gettime(CLOCK_REALTIME, &perf_tmp);
+        perf_edge_points += perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
+
         // leave only the most important edge_points
         if (edge_points.size() > important_count)
             edge_points.erase(edge_points.begin(), edge_points.end()-edge_points.size()/2);
@@ -440,7 +447,6 @@ static void run(const gchar *name,
             Coordinates position = edge_points[i].second;
             if (data_status.at(position)->confidence)
                 continue;
-            --points_to_go;
 
             //fprintf(logfile, "2");
             //fflush(logfile);
@@ -533,6 +539,7 @@ static void run(const gchar *name,
     }
 
     fprintf(logfile, "\n%d points left unfilled\n", points_to_go);
+    fprintf(logfile, "populating edge_points took %lld usec\n", perf_edge_points/1000);
     fprintf(logfile, "neighbour search took %lld usec\n", perf_neighbour_search/1000);
     fprintf(logfile, "refinement took %lld usec\n", perf_refinement/1000);
     fclose(logfile);
