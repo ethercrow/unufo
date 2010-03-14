@@ -89,9 +89,9 @@ static void setup_metric(float autism, float map_weight)
 {
     // TODO: import patch difference metric
     for(int i=-256;i<256;i++) {
-        double value = neglog_cauchy(i/256.0/autism) / neglog_cauchy(1.0/autism) * 65536.0;
-        diff_table[256+i] = int(value);
-        //diff_table[256+i] = i*i;
+        //double value = neglog_cauchy(i/256.0/autism) / neglog_cauchy(1.0/autism) * 65536.0;
+        //diff_table[256+i] = int(value);
+        diff_table[256+i] = i*i;
         map_diff_table[256+i] = int(i*i*map_weight*4.0);
     }
 }
@@ -349,8 +349,19 @@ static void run(const gchar *name,
 
     /* little geometry so that sel_x1 and sel_y1 are now corpus_offset */
 
+    if (sel_x2 >= data.width - max(comp_patch_radius, transfer_patch_radius))
+        sel_x2 = data.width - max(comp_patch_radius, transfer_patch_radius) - 1;
+
+    if (sel_y2 >= data.height - max(comp_patch_radius, transfer_patch_radius))
+        sel_y2 = data.height - max(comp_patch_radius, transfer_patch_radius) - 1;
+
     sel_x1 -= (corpus.width  - (sel_x2-sel_x1))/2;
+    sel_x1 = max(max(comp_patch_radius, transfer_patch_radius), sel_x1);
     sel_y1 -= (corpus.height - (sel_y2-sel_y1))/2;
+    sel_y1 = max(max(comp_patch_radius, transfer_patch_radius), sel_y1);
+
+    sel_x2 = min(sel_x1 + corpus.width, data.width - max(comp_patch_radius, transfer_patch_radius) - 1);
+    sel_y2 = min(sel_y1 + corpus.height, data.height - max(comp_patch_radius, transfer_patch_radius) - 1);
 
     /* Sanity check */
 
@@ -391,7 +402,7 @@ static void run(const gchar *name,
 
     fprintf(logfile, "status  dimensions: (%d, %d)\n", data_status.width, data_status.height);
     fprintf(logfile, "data dimensions: (%d, %d)\n", data.width, data.height);
-    fprintf(logfile, "corpus dimensions: (%d, %d, %d, %d)\n", sel_x1, sel_y1, corpus.width, corpus.height);
+    fprintf(logfile, "corpus dimensions: (%d, %d, %d, %d)\n", sel_x1, sel_y1, sel_x2-sel_x1, sel_y2-sel_y1);
     fflush(logfile);
 
     int total_points = data_points.size();
@@ -494,8 +505,8 @@ static void run(const gchar *name,
                 int x, y;
                 // FIXME: this will suck with large rectangular selections with small borders
                 do {
-                    x = sel_x1 + rand()%corpus.width;
-                    y = sel_y1 + rand()%corpus.height;
+                    x = sel_x1 + rand()%(sel_x2 - sel_x1);
+                    y = sel_y1 + rand()%(sel_y2 - sel_y1);
                 } while (data_mask.at(x,y)[0]);
                 try_point(Coordinates(x, y), position);
             }
