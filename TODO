@@ -4,14 +4,22 @@ TODO list
 general algorithm improvements
 ------------------------------
 
-* handle reinventing gradients, currently this sucks
+handle reinventing gradients, currently this sucks
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+confidence-based blending
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+:current situation:
+    `transfer (conf1, color1) -> (conf2, color2) results in [conf2 ? (conf2, color2) : (conf1-10, color1) ]`
+:idea:
+    `transfer (conf1, color1) -> (conf2, color2) results in (max(conf1, conf2) - 10, (conf2*color2 + conf1'*color1)/(conf1' + conf2)) where conf1' is min(255-conf2, conf1)`
 
 metric improvements
 ----------------------------
 
 * improve complexity metric
 * improve difference metric
-* improve confidence transfer
 
 maintainabilty improvements
 ----------------------------
