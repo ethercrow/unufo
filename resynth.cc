@@ -101,31 +101,47 @@ static int get_complexity(const Coordinates& point)
 {
     // TODO: improve complexity metric
     int confidence_sum = 0;
-    int defined_count = 0;
-    char max_values[input_bytes];
-    char min_values[input_bytes];
-    for (int j = 0; j<input_bytes; ++j) {
-        max_values[j] = 0;
-        min_values[j] = 255;
-    }
+
+    // calculate std dev
+    // TODO: optimize
+    vector<Coordinates> defined_points(0);
     for (int ox=-comp_patch_radius; ox<=comp_patch_radius; ++ox)
         for (int oy=-comp_patch_radius; oy<=comp_patch_radius; ++oy) {
             Coordinates point_off = point + Coordinates(ox, oy);
             if (data_status.at(point_off)->confidence)
-                confidence_sum += data_status.at(point_off)->confidence;
-                ++defined_count;
-                for (int j = 0; j<input_bytes; ++j) {
-                    char c = data.at(point_off)[j];
-                    if (c > max_values[j])
-                        max_values[j] = c;
-                    if (c < min_values[j])
-                        min_values[j] = c;
-                }
+                defined_points.push_back(point_off);
         }
+
+    int defined_count = defined_points.size();
+
+    int mean_values[input_bytes];
+    for (int j = 0; j<input_bytes; ++j)
+        mean_values[j] = 0;
+    for (int i = 0; i<defined_count; ++i) {
+        Pixelel* colors = data.at(defined_points[i]);
+        for (int j = 0; j<input_bytes; ++j)
+            mean_values[j] = colors[j];
+    }
+
+    int stddev[input_bytes];
+    for (int j = 0; j<input_bytes; ++j)
+        stddev[j] = 0;
+    for (int i = 0; i<defined_count; ++i) {
+        Pixelel* colors = data.at(defined_points[i]);
+        for (int j = 0; j<input_bytes; ++j) {
+            int c = colors[j] - mean_values[j];
+            stddev[j] += c*c;
+        }
+    }
+
     int result = 0;
     for (int j = 0; j<input_bytes; ++j)
-        result += max_values[j] - min_values[j];
+        result += stddev[j];
+    result /= defined_count;
+
+    // multiply by average confidence among defined points
     result *= (confidence_sum/defined_count);
+
     return result;
 }
 
@@ -380,7 +396,7 @@ static void run(const gchar *name,
 
     int total_points = data_points.size();
     int points_to_go = total_points;
-    while (points_to_go) {
+    while (points_to_go > 0) {
         gimp_progress_update(1.0-float(points_to_go)/total_points);
         //fprintf(logfile, "\n%d", points_to_go);
         //fflush(logfile);
@@ -422,9 +438,9 @@ static void run(const gchar *name,
             //fprintf(logfile, "\n1");
             //fflush(logfile);
             Coordinates position = edge_points[i].second;
-            --points_to_go;
             if (data_status.at(position)->confidence)
                 continue;
+            --points_to_go;
 
             //fprintf(logfile, "2");
             //fflush(logfile);
@@ -516,7 +532,7 @@ static void run(const gchar *name,
         //fflush(logfile);
     }
 
-    fprintf(logfile, "\n%d points left unfilled", points_to_go);
+    fprintf(logfile, "\n%d points left unfilled\n", points_to_go);
     fprintf(logfile, "neighbour search took %lld usec\n", perf_neighbour_search/1000);
     fprintf(logfile, "refinement took %lld usec\n", perf_refinement/1000);
     fclose(logfile);
