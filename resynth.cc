@@ -313,9 +313,8 @@ static void run(const gchar *name,
     {
         fetch_image_and_mask(drawable, data, bytes, data_mask, 255, sel_x1, sel_y1, sel_x2, sel_y2);
 
-        if (with_map) {
+        if (with_map)
             data.from_drawable(map_out_drawable, 0, 0, map_pos);
-        }
 
         data_status.size(data.width,data.height,1);
 
@@ -325,9 +324,8 @@ static void run(const gchar *name,
             for(int x=0;x<data_status.width;x++) {
                 data_status.at(x,y)->confidence = 0;
 
-                if (parameters.use_border && data_mask.at(x,y)[0] == 0) {
+                if (parameters.use_border && data_mask.at(x,y)[0] == 0)
                     data_status.at(x,y)->confidence = 255;
-                }
 
                 if (data_mask.at(x,y)[0] != 0)
                     data_points.push_back(Coordinates(x,y));
@@ -338,9 +336,8 @@ static void run(const gchar *name,
 
     fetch_image_and_mask(corpus_drawable, corpus, bytes, corpus_mask, 0);
 
-    if (with_map) {
+    if (with_map)
         corpus.from_drawable(map_in_drawable, 0, 0, map_pos);
-    }
 
     /* there's some weird convention about corpus selection inversion. For now. */
     for(int y=0;y<corpus.height;y++)
@@ -547,6 +544,14 @@ static void run(const gchar *name,
             break;
         //fprintf(logfile, "6");
         //fflush(logfile);
+        
+        /* Write result to region */
+        data.to_drawable(drawable, 0,0, 0);
+
+        /* Voodoo to update actual image */
+        gimp_drawable_flush(drawable);
+        gimp_drawable_merge_shadow(drawable->drawable_id,TRUE);
+        gimp_drawable_update(drawable->drawable_id,0,0,data.width,data.height);
     }
 
     fprintf(logfile, "\n%d points left unfilled\n", points_to_go);
