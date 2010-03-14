@@ -87,10 +87,11 @@ static void make_offset_list(void) {
 
 static void setup_metric(float autism, float map_weight)
 {
+    // TODO: import patch difference metric
     for(int i=-256;i<256;i++) {
-        //double value = neglog_cauchy(i/256.0/autism) / neglog_cauchy(1.0/autism) * 65536.0;
-        //diff_table[256+i] = int(value);
-        diff_table[256+i] = i*i;
+        double value = neglog_cauchy(i/256.0/autism) / neglog_cauchy(1.0/autism) * 65536.0;
+        diff_table[256+i] = int(value);
+        //diff_table[256+i] = i*i;
         map_diff_table[256+i] = int(i*i*map_weight*4.0);
     }
 }
@@ -98,6 +99,9 @@ static void setup_metric(float autism, float map_weight)
 // structural complexity of point's neighbourhood
 static int get_complexity(const Coordinates& point)
 {
+    // TODO: improve complexity metric
+    int confidence_sum = 0;
+    int defined_count = 0;
     char max_values[input_bytes];
     char min_values[input_bytes];
     for (int j = 0; j<input_bytes; ++j) {
@@ -108,6 +112,8 @@ static int get_complexity(const Coordinates& point)
         for (int oy=-comp_patch_radius; oy<=comp_patch_radius; ++oy) {
             Coordinates point_off = point + Coordinates(ox, oy);
             if (data_status.at(point_off)->confidence)
+                confidence_sum += data_status.at(point_off)->confidence;
+                ++defined_count;
                 for (int j = 0; j<input_bytes; ++j) {
                     char c = data.at(point_off)[j];
                     if (c > max_values[j])
@@ -119,6 +125,7 @@ static int get_complexity(const Coordinates& point)
     int result = 0;
     for (int j = 0; j<input_bytes; ++j)
         result += max_values[j] - min_values[j];
+    result *= (confidence_sum/defined_count);
     return result;
 }
 
@@ -336,8 +343,8 @@ static void run(const gchar *name,
         values[0].data.d_status = GIMP_PDB_EXECUTION_ERROR;
         return;
     } 
-    /* Setup */
 
+    /* Setup */
     FILE* logfile = fopen("/home/ethercrow/tmp/resynth.log", "wt");
     int64_t perf_neighbour_search      = 0;
     int64_t perf_refinement            = 0;
@@ -348,7 +355,6 @@ static void run(const gchar *name,
 
     setup_metric(parameters.autism, parameters.map_weight);
 
-    /*
     vector<Coordinates>::iterator refinement_begins_here = data_points.end();
 
     // this forces some data_points to be reconsidered
@@ -357,14 +363,13 @@ static void run(const gchar *name,
         // note magic number... the more repetition, the higher the quality, maybe
         // obviously, we need this multiplier under 1 to converge
         
-        n *= 7/8; 
+        n *= 1/4; 
         for(int i=0;i<n;i++)
             data_points.push_back(data_points[i]);
     }
 
     std::random_shuffle(data_points.begin(), refinement_begins_here);
     std::random_shuffle(refinement_begins_here, data_points.end());
-    */
 
     /* Do it */
 
@@ -402,13 +407,15 @@ static void run(const gchar *name,
             if (!island_flag) {
                 edge_points.push_back(std::make_pair(get_complexity(data_points[i]),
                     data_points[i]));
-                data_points.erase(data_points.begin() + i--);
             }
         }
         sort(edge_points.begin(), edge_points.end());
-        int edge_points_size = edge_points.size();
 
-        vector<Coordinates> edge_results(0);
+        // leave only the most important edge_points
+        if (edge_points.size() > important_count)
+            edge_points.erase(edge_points.begin(), edge_points.end()-edge_points.size()/2);
+
+        int edge_points_size = edge_points.size();
 
         // find best-fit patches for edge_points
         for(int i=0; i < edge_points_size; ++i) {
@@ -481,7 +488,6 @@ static void run(const gchar *name,
             //fprintf(logfile, "5");
             //fflush(logfile);
 
-            //edge_results.push_back(best_point);
             for (int ox=-transfer_patch_radius; ox<=transfer_patch_radius; ++ox) {
                 for (int oy=-transfer_patch_radius; oy<=transfer_patch_radius; ++oy) {
                     Coordinates offset(ox, oy);
@@ -493,7 +499,8 @@ static void run(const gchar *name,
                     {
                         for(int j=0;j<input_bytes;j++)
                             data.at(near_dst)[j] = data.at(near_src)[j];
-                        data_status.at(near_dst)->confidence = 255; // FIXME: assign proper confidence
+                        // TODO: better confidence transfer
+                        data_status.at(near_dst)->confidence = max(10, data_status.at(near_src)->confidence - 10); 
                     }
                 }
             }
