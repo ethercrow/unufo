@@ -39,3 +39,8 @@ QA improvements
 * moar tests
 * CTest maybe?
 
+Usability improvements
+----------------------
+
+* GUI access for all important parameters
+* Selecting source region in addition to destination region (does gimp support multiple selections?)
