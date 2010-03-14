@@ -108,8 +108,10 @@ static int get_complexity(const Coordinates& point)
     for (int ox=-comp_patch_radius; ox<=comp_patch_radius; ++ox)
         for (int oy=-comp_patch_radius; oy<=comp_patch_radius; ++oy) {
             Coordinates point_off = point + Coordinates(ox, oy);
-            if (data_status.at(point_off)->confidence)
+            if (data_status.at(point_off)->confidence) {
+                confidence_sum += data_status.at(point_off)->confidence;
                 defined_points.push_back(point_off);
+            }
         }
 
     int defined_count = defined_points.size();
@@ -129,7 +131,7 @@ static int get_complexity(const Coordinates& point)
     for (int i = 0; i<defined_count; ++i) {
         Pixelel* colors = data.at(defined_points[i]);
         for (int j = 0; j<input_bytes; ++j) {
-            int c = colors[j] - mean_values[j];
+            int c = mean_values[j] - colors[j];
             stddev[j] += c*c;
         }
     }
