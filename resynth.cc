@@ -345,7 +345,7 @@ static void run(const gchar *name,
     } 
 
     /* Setup */
-    FILE* logfile = fopen("/home/ethercrow/tmp/resynth.log", "wt");
+    FILE* logfile = fopen("/tmp/resynth.log", "wt");
     int64_t perf_neighbour_search      = 0;
     int64_t perf_refinement            = 0;
     int64_t perf_doin_it_right         = 0;
