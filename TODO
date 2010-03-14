@@ -4,6 +4,12 @@ TODO list
 general algorithm improvements
 ------------------------------
 
+handle mirrored and rotated patches
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+adaptive patch size
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
 handle reinventing gradients, currently this sucks
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
