@@ -1,0 +1,27 @@
+TODO list
+========================
+
+general algorithm improvements
+------------------------------
+
+* handle reinventing gradients, currently this sucks
+
+metric improvements
+----------------------------
+
+* improve complexity metric
+* improve difference metric
+* improve confidence transfer
+
+maintainabilty improvements
+----------------------------
+
+* code decoupling
+* CMake
+
+QA improvements
+----------------------------
+
+* moar tests
+* CTest maybe?
+
