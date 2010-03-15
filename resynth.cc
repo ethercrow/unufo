@@ -227,10 +227,6 @@ static void run(const gchar *name,
     /* Deal with run mode (parameter zero) */
     ok = false;
     switch(param[0].data.d_int32) {
-        case GIMP_RUN_INTERACTIVE :
-            get_last_parameters(&parameters,drawable->drawable_id); 
-            ok = get_parameters_by_asking(&parameters,drawable->drawable_id); 
-            break;
         case GIMP_RUN_NONINTERACTIVE :
             ok = get_parameters_from_list(&parameters, nparams, param); 
             break;
@@ -290,13 +286,8 @@ static void run(const gchar *name,
     if (parameters.corpus_id == drawable->drawable_id)
         parameters.corpus_id = -1;
 
-    if (param[0].data.d_int32 == GIMP_RUN_INTERACTIVE) {
-        gimp_set_data("plug_in_resynthesizer", &parameters, sizeof(parameters));
-    }
-
     if (parameters.corpus_id == -1)
         parameters.corpus_id = drawable->drawable_id;
-
 
     gimp_progress_init(_("Resynthesize"));
     gimp_progress_update(0.0);
