@@ -87,7 +87,7 @@ static void make_offset_list(void) {
 
 static void setup_metric(float autism, float map_weight)
 {
-    // TODO: import patch difference metric
+    // TODO: improve patch difference metric
     for(int i=-256;i<256;i++) {
         //double value = neglog_cauchy(i/256.0/autism) / neglog_cauchy(1.0/autism) * 65536.0;
         //diff_table[256+i] = int(value);
