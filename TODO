@@ -42,5 +42,4 @@ QA improvements
 Usability improvements
 ----------------------
 
-* GUI access for all important parameters
 * Selecting source region in addition to destination region (does gimp support multiple selections?)
