@@ -15,18 +15,14 @@ all: resynth
 	@echo 'Now type "make install" to install resynthesizer'
 	@echo 
 
-install: resynth smart-enlarge.scm smart-remove.scm
+install: resynth smart-remove.scm
 	$(GIMPTOOL) --install-bin resynth
-	$(GIMPTOOL) --install-script smart-enlarge.scm
 	$(GIMPTOOL) --install-script smart-remove.scm
 	@echo
 	@echo After restarting the Gimp you should find the
 	@echo following items in the pop-up image menu:
 	@echo
-	@echo "  * Filters/Map/Resynthesize"
-	@echo "  * Filters/Enhance/Smart enlarge"
-	@echo "  * Filters/Enhance/Smart sharpen"
-	@echo "  * Filters/Enhance/Smart remove selection"
+	@echo "  * Filters/Enhance/Heal selection"
 	@echo
 
 resynth: resynth.cc *.h
