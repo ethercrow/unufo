@@ -64,16 +64,18 @@ void fetch_image_and_mask(GimpDrawable *drawable, Bitmap<Pixelel> &image, int by
    the main GIMP app */
 static bool get_last_parameters(Parameters *param, int default_drawable) {
     /* Defaults in case this is our first run */
-    param->corpus_id = -1;
-    param->input_map_id = -1;
+    param->corpus_id     = -1;
+    param->input_map_id  = -1;
     param->output_map_id = -1;
-    param->v_tile = true;
-    param->h_tile = true;
-    param->use_border = true;
-    param->map_weight = 0.5;
-    param->autism = 0.117; /* 30/256 */
-    param->neighbours = 30;
-    param->trys = 200;
+    param->v_tile        = true;
+    param->h_tile        = true;
+    param->use_border    = true;
+    param->map_weight    = 0.5;
+    param->autism        = 0.117; /* 30/256 */
+    param->neighbours    = 30;
+    param->tries         = 200;
+    param->comp_size     = 3;
+    param->transfer_size = 2;
 
     gimp_get_data("plug_in_resynthesizer", param);
 
@@ -87,7 +89,7 @@ static bool get_last_parameters(Parameters *param, int default_drawable) {
 
 /* Convert argument list into parameters */
 static bool get_parameters_from_list(Parameters *param, int n_args, const GimpParam *args) {
-    if (n_args != 13)
+    if (n_args != 15)
         return false;
 
     param->v_tile        = args[3].data.d_int32;
@@ -99,7 +101,9 @@ static bool get_parameters_from_list(Parameters *param, int n_args, const GimpPa
     param->map_weight    = args[9].data.d_float;
     param->autism        = args[10].data.d_float;
     param->neighbours    = args[11].data.d_int32;
-    param->trys          = args[12].data.d_int32;
+    param->tries         = args[12].data.d_int32;
+    param->comp_size     = args[13].data.d_int32;
+    param->transfer_size = args[14].data.d_int32;
 
     return true;
 }
@@ -139,7 +143,9 @@ static void query() {
         { GIMP_PDB_FLOAT, "map_weight", "Weight to give to map, if map is used" },
         { GIMP_PDB_FLOAT, "autism", "Sensitivity to outliers" },
         { GIMP_PDB_INT32, "neighbourhood", "Neighbourhood size" },
-        { GIMP_PDB_INT32, "trys", "Search thoroughness" },
+        { GIMP_PDB_INT32, "tries", "Search thoroughness" },
+        { GIMP_PDB_INT32, "comp_size", "Patches of this size are compared" },
+        { GIMP_PDB_INT32, "transfer_size", "Size of transfer unit" },
     };
 
     GimpParamDef *return_vals = NULL;

@@ -36,7 +36,8 @@ struct Parameters {
 
     double map_weight;
     double autism;
-    gint32 neighbours, trys;
+    gint32 neighbours, tries;
+    gint32 comp_size, transfer_size;
 };
 
 //Bitmap class with three dimensions (width, height, number of channels)

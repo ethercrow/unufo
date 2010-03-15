@@ -47,6 +47,7 @@ using namespace std;
 static int diff_table[512], map_diff_table[512];
 
 static int input_bytes, map_bytes, map_pos, bytes;
+static int comp_patch_radius, transfer_patch_radius;
 
 // we must fill selection subset of data
 // using corpus_mask subset of corpus for inspiration
@@ -199,6 +200,9 @@ static void run(const gchar *name,
     GimpDrawable *drawable, *corpus_drawable, *map_in_drawable, *map_out_drawable;
     bool ok, with_map;
 
+    FILE* logfile = fopen("/tmp/resynth.log", "wt");
+
+    fprintf(logfile, "gimp setup dragons begin");
     //////////////////////////////
     // Gimp setup dragons BEGIN
     //////////////////////////////
@@ -212,9 +216,11 @@ static void run(const gchar *name,
     values[0].type = GIMP_PDB_STATUS;
     values[0].data.d_status = GIMP_PDB_SUCCESS;
 
+    fprintf(logfile, "init_gtk");
     init_gtk();
 
     /* Get drawable */
+    fprintf(logfile, "get drawable\n");
     drawable = gimp_drawable_get(param[2].data.d_drawable);
 
     if (!gimp_drawable_is_rgb(drawable->drawable_id) &&
@@ -225,6 +231,7 @@ static void run(const gchar *name,
     }
 
     /* Deal with run mode (parameter zero) */
+    fprintf(logfile, "before get_parameters %d\n", param[0].data.d_int32);
     ok = false;
     switch(param[0].data.d_int32) {
         case GIMP_RUN_NONINTERACTIVE :
@@ -234,8 +241,10 @@ static void run(const gchar *name,
             ok = get_last_parameters(&parameters,drawable->drawable_id); 
             break;
     }
+    fprintf(logfile, "after get_parameters\n");
 
     if (!ok) {
+        fprintf(logfile, "Panic!\n");
         gimp_drawable_detach(drawable);
         values[0].data.d_status = GIMP_PDB_EXECUTION_ERROR;
         return;
@@ -244,6 +253,7 @@ static void run(const gchar *name,
 
     corpus_drawable = gimp_drawable_get(parameters.corpus_id);
     if (corpus_drawable->bpp != drawable->bpp) {
+        fprintf(logfile, "get corpus failed");
         gimp_message(_("The input texture and output image must have the same number of color channels."));
         gimp_drawable_detach(drawable);
         gimp_drawable_detach(corpus_drawable);
@@ -292,11 +302,13 @@ static void run(const gchar *name,
     gimp_progress_init(_("Resynthesize"));
     gimp_progress_update(0.0);
 
+    fprintf(logfile, "gimp setup dragons end");
     //////////////////////////////
     // Gimp setup dragons END
     //////////////////////////////
 
-
+    comp_patch_radius     = parameters.comp_size;
+    transfer_patch_radius = parameters.transfer_size;
     input_bytes  = drawable->bpp;
     map_bytes    = (with_map ? map_in_drawable->bpp : 0);
     map_pos      = input_bytes; //TODO: map_pos can be safely replaced with input_bytes 
@@ -362,7 +374,6 @@ static void run(const gchar *name,
     } 
 
     /* Setup */
-    FILE* logfile = fopen("/tmp/resynth.log", "wt");
     int64_t perf_neighbour_search      = 0;
     int64_t perf_refinement            = 0;
     int64_t perf_edge_points           = 0;
@@ -491,7 +502,7 @@ static void run(const gchar *name,
             clock_gettime(CLOCK_REALTIME, &perf_tmp);
             perf_refinement -= perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
 
-            for (int j=0; j<parameters.trys; ++j) {
+            for (int j=0; j<parameters.tries; ++j) {
                 int x, y;
                 // FIXME: this will suck with large rectangular selections with small borders
                 do {
