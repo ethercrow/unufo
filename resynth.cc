@@ -446,7 +446,7 @@ static void run(const gchar *name,
 
         // leave only the most important edge_points
         if (edge_points.size() > important_count)
-            edge_points.erase(edge_points.begin(), edge_points.end()-edge_points.size()/2);
+            edge_points.erase(edge_points.begin(), edge_points.end()-edge_points.size()/5);
 
         int edge_points_size = edge_points.size();
 
@@ -532,7 +532,7 @@ static void run(const gchar *name,
                         for(int j=0;j<input_bytes;j++)
                             data.at(near_dst)[j] = data.at(near_src)[j];
                         // TODO: better confidence transfer
-                        data_status.at(near_dst)->confidence = max(10, data_status.at(near_src)->confidence - 10); 
+                        data_status.at(near_dst)->confidence = max(10, data_status.at(near_src)->confidence - 5); 
                     }
                 }
             }

@@ -11,15 +11,15 @@ typedef struct Coordinates {
     Coordinates(int _x,int _y): x(_x), y(_y) { }
     Coordinates() { }
 
-    bool operator < (const Coordinates other) const { 
+    bool operator < (const Coordinates& other) const { 
         return y*y+x*x < (other.y*other.y+other.x*other.x); 
     }
 
-    Coordinates operator + (const Coordinates a) const { 
+    Coordinates operator + (const Coordinates& a) const { 
         return Coordinates(x+a.x,y+a.y); 
     }
 
-    Coordinates operator - (const Coordinates a) const { 
+    Coordinates operator - (const Coordinates& a) const { 
         return Coordinates(x-a.x,y-a.y); 
     }
 } Coordinates;
