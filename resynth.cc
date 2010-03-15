@@ -302,7 +302,7 @@ static void run(const gchar *name,
     gimp_progress_init(_("Resynthesize"));
     gimp_progress_update(0.0);
 
-    fprintf(logfile, "gimp setup dragons end");
+    fprintf(logfile, "gimp setup dragons end\n");
     //////////////////////////////
     // Gimp setup dragons END
     //////////////////////////////
@@ -371,12 +371,13 @@ static void run(const gchar *name,
         gimp_message("The output image is too small.");
         values[0].data.d_status = GIMP_PDB_EXECUTION_ERROR;
         return;
-    } 
+    }
 
     /* Setup */
-    int64_t perf_neighbour_search      = 0;
-    int64_t perf_refinement            = 0;
-    int64_t perf_edge_points           = 0;
+    int64_t perf_neighbour_search = 0;
+    int64_t perf_refinement       = 0;
+    int64_t perf_fill_undo        = 0;
+    int64_t perf_edge_points      = 0;
     struct timespec perf_tmp;
 
     make_offset_list();
@@ -549,6 +550,9 @@ static void run(const gchar *name,
         //fprintf(logfile, "6");
         //fflush(logfile);
         
+        clock_gettime(CLOCK_REALTIME, &perf_tmp);
+        perf_fill_undo -= perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
+
         /* Write result to region */
         data.to_drawable(drawable, 0,0, 0);
 
@@ -556,12 +560,16 @@ static void run(const gchar *name,
         gimp_drawable_flush(drawable);
         gimp_drawable_merge_shadow(drawable->drawable_id,TRUE);
         gimp_drawable_update(drawable->drawable_id,0,0,data.width,data.height);
+
+        clock_gettime(CLOCK_REALTIME, &perf_tmp);
+        perf_fill_undo += perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
     }
 
     fprintf(logfile, "\n%d points left unfilled\n", points_to_go);
     fprintf(logfile, "populating edge_points took %lld usec\n", perf_edge_points/1000);
     fprintf(logfile, "neighbour search took %lld usec\n", perf_neighbour_search/1000);
     fprintf(logfile, "refinement took %lld usec\n", perf_refinement/1000);
+    fprintf(logfile, "updating undo stack took %lld usec\n", perf_fill_undo/1000);
     fclose(logfile);
 
     /* Write result back to the GIMP, clean up */
