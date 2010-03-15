@@ -28,7 +28,7 @@
 ; lkk comment: creates stencil selection in a temp dupe image to pass as source drawable to plugin
 
 
-(define (script-fu-smart-remove img layer corpus-border)
+(define (script-fu-smart-remove img layer corpus-border neighbour-count random-tries-count)
   (cond
     ((= 0 (car (gimp-selection-bounds img))) 
       (gimp-message "To use this script-fu, first select the region you wish to remove.")
@@ -102,8 +102,8 @@
         -1
         0.0
         0.117
-        10000                     ; neighbour count
-        10000                     ; number of additional tries
+        neighbour-count           ; neighbour count
+        random-tries-count        ; number of additional tries
       )
 
       (gimp-image-delete dupe)
@@ -120,6 +120,8 @@ Requires separate resynthesizer plug-in."
 		    "RGB* GRAY*"
 		    SF-IMAGE "Input Image" 0
 		    SF-DRAWABLE "Input Layer" 0
-		    SF-ADJUSTMENT "Radius to take texture from" '(50 7 1000 1.0 1.0 0 1)
+		    SF-ADJUSTMENT "Radius to take texture from" '(50 7 2000 1.0 1.0 0 1)
+		    SF-ADJUSTMENT "How many neighbour patches to consider as a source" '(10000 8 40000 10.0 100.0 0 1)
+		    SF-ADJUSTMENT "How many randomly positioned patches to consider as a source" '(10000 100 40000 10.0 100.0 0 1)
 )
 
