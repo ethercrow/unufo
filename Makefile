@@ -1,11 +1,11 @@
-CC = g++
+CXX = g++
 
 GIMPTOOL = gimptool-2.0
 
 GIMP_LDFLAGS=`$(GIMPTOOL) --libs`
 GIMP_CFLAGS=`$(GIMPTOOL) --cflags`
 
-CFLAGS=$(GIMP_CFLAGS) -O3 -fno-common -ffast-math -frename-registers -fomit-frame-pointer
+CXXFLAGS=$(GIMP_CFLAGS) -O3 -fno-common -ffast-math -frename-registers -fomit-frame-pointer -Wall -Wextra -pedantic -std=c++0x
 
 LDFLAGS=$(GIMP_LDFLAGS) -lm
 
@@ -26,7 +26,7 @@ install: resynth smart-remove.scm
 	@echo
 
 resynth: resynth.cc *.h
-	$(CC) $(CFLAGS) -o $@ resynth.cc $(LDFLAGS)
+	$(CXX) $(CXXFLAGS) -o $@ resynth.cc $(LDFLAGS)
 
 clean:
 	-rm -f *~ *.o core resynth
