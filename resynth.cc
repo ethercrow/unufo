@@ -222,8 +222,8 @@ static int get_difference(const Coordinates& candidate,
             Coordinates off = Coordinates(ox, oy);
             Coordinates near_cand = candidate + off;
             Coordinates near_pos  = position  + off;
-            if (data_status.at(candidate_off)->confidence && 
-                data_status.at(position_off)->confidence)
+            if (data_status.at(near_cand)->confidence && 
+                data_status.at(near_pos)->confidence)
             {
                 ++compared_count;
                 for(int j=0;j<input_bytes;j++) {
