@@ -627,7 +627,7 @@ static void run(const gchar*,
             // Try interpolation END
             ///////////////////////////
             
-            if (grad_error < best) {
+            if (grad_error < best && parameters.invent_gradients) {
                 for (int ox=-transfer_patch_radius; ox<=transfer_patch_radius; ++ox)
                     for (int oy=-transfer_patch_radius; oy<=transfer_patch_radius; ++oy) {
                         Coordinates near_pos = position + Coordinates(ox, oy);

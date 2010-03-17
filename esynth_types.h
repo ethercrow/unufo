@@ -31,6 +31,7 @@ struct Status {
 struct Parameters {
     bool h_tile, v_tile;
     bool use_border;
+    bool invent_gradients;
 
     gint32 corpus_id, input_map_id, output_map_id;
 
