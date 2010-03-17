@@ -43,6 +43,7 @@ using namespace std;
 #include "esynth_geometry.h"
 
 /* Helpers for the main function */
+static FILE* logfile;
 
 static int diff_table[512];
 
@@ -188,7 +189,7 @@ void get_edge_points(vector<pair<int, Coordinates>>& edge_points)
     // leave only the most important edge_points
     if (edge_points.size() > important_count)
         edge_points.erase(edge_points.begin(),
-            edge_points.end()-edge_points.size()/5);
+            edge_points.end()-edge_points.size()/2);
 }
 
 void transfer_patch(const Coordinates& position, const Coordinates& source)
@@ -240,6 +241,74 @@ static int get_difference(const Coordinates& candidate,
         return best+1;
 }
 
+// return patch dissimilarity with linear gradient patch
+// algorithm is sort of poor man linear regression
+static int get_gradientness(const Coordinates& position, 
+        int mean_values[], int grad_x[], int grad_y[])
+{
+    int defined_count = 0;
+    int defined_ox_count = 0;
+    int defined_oy_count = 0;
+
+    memset(mean_values, 0, input_bytes*sizeof(int));
+    memset(grad_x, 0, input_bytes*sizeof(int));
+    memset(grad_y, 0, input_bytes*sizeof(int));
+
+    // calculate mean values
+    for (int ox=-comp_patch_radius; ox<=comp_patch_radius; ++ox)
+        for (int oy=-comp_patch_radius; oy<=comp_patch_radius; ++oy) {
+            Coordinates near_pos = position + Coordinates(ox, oy);
+            if (data_status.at(near_pos)->confidence) {
+                ++defined_count;
+                for (int j = 0; j<input_bytes; ++j)
+                    mean_values[j] += data.at(near_pos)[j];
+            }
+        }
+
+    for (int j = 0; j<input_bytes; ++j)
+        mean_values[j] /= defined_count;
+
+    // calculate gradient
+    for (int ox=-comp_patch_radius; ox<=comp_patch_radius; ++ox)
+        for (int oy=-comp_patch_radius; oy<=comp_patch_radius; ++oy) {
+            Coordinates near_pos = position + Coordinates(ox, oy);
+            if (data_status.at(near_pos)->confidence) {
+                if (ox) {
+                    ++defined_ox_count;
+                    for (int j = 0; j<input_bytes; ++j)
+                        grad_x[j] += (data.at(near_pos)[j] - mean_values[j])/ox;
+                }
+                if (oy) {
+                    ++defined_oy_count;
+                    for (int j = 0; j<input_bytes; ++j)
+                        grad_y[j] += (data.at(near_pos)[j] - mean_values[j])/oy;
+                }
+            }
+        }
+
+    for (int j = 0; j<input_bytes; ++j) {
+        grad_x[j] /= defined_ox_count;
+        grad_y[j] /= defined_oy_count;
+    }
+   
+
+    // calculate dissimilarity with gradient
+    int error_sum = 0;
+    for (int ox=-comp_patch_radius; ox<=comp_patch_radius; ++ox)
+        for (int oy=-comp_patch_radius; oy<=comp_patch_radius; ++oy) {
+            Coordinates near_pos = position + Coordinates(ox, oy);
+            if (data_status.at(near_pos)->confidence) 
+                for (int j = 0; j<input_bytes; ++j) {
+                    int d = (data.at(near_pos)[j] - mean_values[j] - (grad_x[j]*ox) - (grad_y[j]*oy));
+                    //fprintf(logfile, "\n%d, %d, %d", ox, oy, d);
+                    //fflush(logfile);
+                    error_sum += diff_table[256 + d];
+                }
+        }
+
+    return error_sum;
+}
+
 static inline void try_point(const Coordinates& candidate,
                              const Coordinates& position)
 {
@@ -264,7 +333,7 @@ static void run(const gchar*,
     GimpDrawable *drawable, *corpus_drawable, *map_in_drawable, *map_out_drawable;
     bool ok, with_map;
 
-    FILE* logfile = fopen("/tmp/resynth.log", "wt");
+    logfile = fopen("/tmp/resynth.log", "wt");
 
     fprintf(logfile, "gimp setup dragons begin");
     //////////////////////////////
@@ -440,6 +509,7 @@ static void run(const gchar*,
     /* Setup */
     int64_t perf_neighbour_search = 0;
     int64_t perf_refinement       = 0;
+    int64_t perf_interpolation    = 0;
     int64_t perf_fill_undo        = 0;
     int64_t perf_edge_points      = 0;
     struct timespec perf_tmp;
@@ -450,12 +520,14 @@ static void run(const gchar*,
 
     /* Do it */
 
+    int total_points = data_points.size();
+
     fprintf(logfile, "status  dimensions: (%d, %d)\n", data_status.width, data_status.height);
     fprintf(logfile, "data dimensions: (%d, %d)\n", data.width, data.height);
     fprintf(logfile, "corpus dimensions: (%d, %d, %d, %d)\n", sel_x1, sel_y1, sel_x2-sel_x1, sel_y2-sel_y1);
+    fprintf(logfile, "total points to be filled: %d\n", total_points);
     fflush(logfile);
 
-    int total_points = data_points.size();
     int points_to_go = total_points;
     while (points_to_go > 0) {
         gimp_progress_update(1.0-float(points_to_go)/total_points);
@@ -534,9 +606,40 @@ static void run(const gchar*,
             ///////////////////////////
             // Random refinement END 
             ///////////////////////////
-            
-            transfer_patch(position, best_point);
 
+            ///////////////////////////
+            // Try interpolation BEGIN
+            ///////////////////////////
+
+            clock_gettime(CLOCK_REALTIME, &perf_tmp);
+            perf_interpolation -= perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
+
+            int mean_values[input_bytes];
+            int grad_x[input_bytes];
+            int grad_y[input_bytes];
+            int grad_error = get_gradientness(position, mean_values, grad_x, grad_y);
+
+
+            clock_gettime(CLOCK_REALTIME, &perf_tmp);
+            perf_interpolation += perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
+
+            ///////////////////////////
+            // Try interpolation END
+            ///////////////////////////
+            
+            if (grad_error < best) {
+                for (int ox=-transfer_patch_radius; ox<=transfer_patch_radius; ++ox)
+                    for (int oy=-transfer_patch_radius; oy<=transfer_patch_radius; ++oy) {
+                        Coordinates near_pos = position + Coordinates(ox, oy);
+                        if (!data_status.at(near_pos)->confidence) {
+                            for (int j = 0; j<input_bytes; ++j)
+                                data.at(near_pos)[j] = mean_values[j] + (grad_x[j]*ox) + (grad_y[j]*oy);
+                            data_status.at(near_pos)->confidence = 20;
+                        }
+                    }
+            } else {
+                transfer_patch(position, best_point);
+            }
         }
 
         if (!edge_points_size)
@@ -560,6 +663,7 @@ static void run(const gchar*,
     fprintf(logfile, "populating edge_points took %lld usec\n", perf_edge_points/1000);
     fprintf(logfile, "neighbour search took %lld usec\n", perf_neighbour_search/1000);
     fprintf(logfile, "refinement took %lld usec\n", perf_refinement/1000);
+    fprintf(logfile, "interpolation took %lld usec\n", perf_interpolation/1000);
     fprintf(logfile, "updating undo stack took %lld usec\n", perf_fill_undo/1000);
     fclose(logfile);
 
