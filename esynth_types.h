@@ -51,7 +51,7 @@ struct Bitmap {
     }
 
     ~Bitmap() {
-        delete data;
+        delete[] data;
     }
 
     void size(int w,int h,int d) {
@@ -87,7 +87,7 @@ struct Bitmap {
 
         gimp_pixel_rgn_set_rect(&region, img, x1,y1,width,height);
 
-        delete img;
+        delete[] img;
     }
 
     void from_drawable(GimpDrawable *drawable, 
@@ -105,7 +105,7 @@ struct Bitmap {
             for(j=0;j<(int)(drawable->bpp);j++)
                 data[i*depth+dest_layer+j] = img[i*drawable->bpp+j];
 
-        delete img;
+        delete[] img;
     }
 };
 
