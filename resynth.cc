@@ -608,7 +608,7 @@ static void run(const gchar*,
             ///////////////////////////
 
             ///////////////////////////
-            // Try interpolation BEGIN
+            // Try interpolation and transfer BEGIN
             ///////////////////////////
 
             clock_gettime(CLOCK_REALTIME, &perf_tmp);
@@ -617,17 +617,9 @@ static void run(const gchar*,
             int mean_values[input_bytes];
             int grad_x[input_bytes];
             int grad_y[input_bytes];
-            int grad_error = get_gradientness(position, mean_values, grad_x, grad_y);
-
-
-            clock_gettime(CLOCK_REALTIME, &perf_tmp);
-            perf_interpolation += perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
-
-            ///////////////////////////
-            // Try interpolation END
-            ///////////////////////////
-            
-            if (grad_error < best && parameters.invent_gradients) {
+            if (parameters.invent_gradients &&
+                get_gradientness(position, mean_values, grad_x, grad_y) < best)
+            {
                 for (int ox=-transfer_patch_radius; ox<=transfer_patch_radius; ++ox)
                     for (int oy=-transfer_patch_radius; oy<=transfer_patch_radius; ++oy) {
                         Coordinates near_pos = position + Coordinates(ox, oy);
@@ -637,9 +629,16 @@ static void run(const gchar*,
                             data_status.at(near_pos)->confidence = 20;
                         }
                     }
-            } else {
+            } else
                 transfer_patch(position, best_point);
-            }
+
+            ///////////////////////////
+            // Try interpolation and transfer END
+            ///////////////////////////
+            
+            clock_gettime(CLOCK_REALTIME, &perf_tmp);
+            perf_interpolation += perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
+
         }
 
         if (!edge_points_size)
