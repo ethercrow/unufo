@@ -217,24 +217,38 @@ static int get_difference(const Coordinates& candidate,
 {
     int sum = 0;
     int compared_count = 0;
-    for (int ox=-comp_patch_radius; ox<=comp_patch_radius; ++ox)
-        for (int oy=-comp_patch_radius; oy<=comp_patch_radius; ++oy) {
+
+    Pixelel* d_n_p =        data.at(position  + Coordinates(-comp_patch_radius, -comp_patch_radius));
+    Pixelel* d_n_c =        data.at(candidate + Coordinates(-comp_patch_radius, -comp_patch_radius));
+    Status* ds_n_p = data_status.at(position  + Coordinates(-comp_patch_radius, -comp_patch_radius));
+    Status* ds_n_c = data_status.at(candidate + Coordinates(-comp_patch_radius, -comp_patch_radius));
+
+    for (int oy=-comp_patch_radius; oy<=comp_patch_radius; ++oy) {
+        for (int ox=-comp_patch_radius; ox<=comp_patch_radius; ++ox) {
             // TODO: consider mirroring and rotation
-            Coordinates off = Coordinates(ox, oy);
-            Coordinates near_cand = candidate + off;
-            Coordinates near_pos  = position  + off;
-            if (data_status.at(near_cand)->confidence && 
-                data_status.at(near_pos)->confidence)
+            if (ds_n_c->confidence && 
+                ds_n_p->confidence)
             {
                 ++compared_count;
                 for(int j=0;j<input_bytes;j++) {
-                    int d = (data.at(near_pos)[j] - data.at(near_cand)[j]);
+                    int d = (int(d_n_p[j]) - int(d_n_c[j]));
                     sum += diff_table[256 + d];
                 }
-            }  else if (!data_status.at(near_cand)->confidence) {
+            }  else if (!ds_n_c->confidence) {
                 sum += diff_table[0];
             }
+            d_n_p  += data.depth;
+            d_n_c  += data.depth;
+            ds_n_p += data_status.depth;
+            ds_n_c += data_status.depth;
         }
+        int d_shift  = data.depth*(data.width - (comp_patch_radius<<1) - 1);
+        int ds_shift = data_status.depth*(data.width - (comp_patch_radius<<1) - 1);
+        d_n_p  += d_shift;
+        d_n_c  += d_shift;
+        ds_n_p += ds_shift;
+        ds_n_c += ds_shift;
+    }
     if (compared_count)
         return sum;
     else
