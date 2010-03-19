@@ -28,7 +28,8 @@
 ; lkk comment: creates stencil selection in a temp dupe image to pass as source drawable to plugin
 
 
-(define (script-fu-smart-remove img layer corpus-border neighbour-count random-tries-count comp-size transfer-size invent-gradients)
+(define (script-fu-smart-remove img layer corpus-border neighbour-count random-tries-count
+         comp-size transfer-size invent-gradients max-adjust equal-adjust)
   (cond
     ((= 0 (car (gimp-selection-bounds img))) 
       (gimp-message "To use this script-fu, first select the region you wish to remove.")
@@ -107,6 +108,8 @@
         comp-size
         transfer-size
         invent-gradients
+        max-adjust
+        equal-adjust
       )
 
       (gimp-image-delete dupe)
@@ -129,5 +132,7 @@ Requires separate resynthesizer plug-in."
 		    SF-ADJUSTMENT "Patch size (larger = slower)" '(3 1 50 1.0 2.0 0 1)
 		    SF-ADJUSTMENT "Transfer unit size (smaller = slower, but possibly less artifacts)" '(2 0 30 1.0 2.0 0 1)
 		    SF-TOGGLE "Invent gradients (may greatly help in plain areas without texture)" FALSE
+		    SF-ADJUSTMENT "Max color adjustment applied to transferred patch" '(10 0 255 1.0 2.0 0 1)
+		    SF-TOGGLE "Apply the same amount of adjustment to all channels (expect weird alpha)" FALSE
 )
 

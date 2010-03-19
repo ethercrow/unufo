@@ -50,6 +50,11 @@ static int diff_table[512];
 static int input_bytes, map_bytes, map_pos, bytes;
 static int comp_patch_radius, transfer_patch_radius;
 
+static bool equal_adjustment;
+static int max_adjustment;
+
+static bool invent_gradients;
+
 // we must fill selection subset of data
 // using corpus_mask subset of corpus for inspiration
 // status holds current state of point filling
@@ -70,6 +75,7 @@ static vector<Coordinates> data_points, sorted_offsets;
 
 static int best;
 static Coordinates best_point;
+static vector<int> best_color_diff(0);
 
 static double neglog_cauchy(double x)
 {
@@ -187,7 +193,7 @@ void get_edge_points(vector<pair<int, Coordinates>>& edge_points)
     // or interpolation.. depends on where you're looking from
 
     // leave only the most important edge_points
-    if (edge_points.size() > important_count)
+    if (!invent_gradients && edge_points.size() > important_count)
         edge_points.erase(edge_points.begin(),
             edge_points.end()-edge_points.size()/2);
 }
@@ -198,13 +204,17 @@ void transfer_patch(const Coordinates& position, const Coordinates& source)
         for (int oy=-transfer_patch_radius; oy<=transfer_patch_radius; ++oy) {
             Coordinates offset(ox, oy);
             Coordinates near_dst = position + offset;
-            Coordinates near_src = best_point + offset;
+            Coordinates near_src = source + offset;
             // transfer only defined points and only to undefined points
             if (!(data_status.at(near_dst)->confidence) &&
                 data_status.at(near_src)->confidence)
             {
-                for(int j=0;j<input_bytes;j++)
-                    data.at(near_dst)[j] = data.at(near_src)[j];
+                for(int j=0;j<input_bytes;j++) {
+                    int new_color = data.at(near_src)[j] + best_color_diff[j];
+                    //if (new_color < -256) new_color = 0;
+                    //if (new_color >  255) new_color = 255;
+                    data.at(near_dst)[j] = new_color;
+                }
                 // TODO: better confidence transfer
                 data_status.at(near_dst)->confidence = max(10,
                     data_status.at(near_src)->confidence - 5); 
@@ -212,46 +222,96 @@ void transfer_patch(const Coordinates& position, const Coordinates& source)
         }
 }
 
+// TODO: consider mirroring and rotation
 static int get_difference(const Coordinates& candidate,
                           const Coordinates& position)
 {
     int sum = 0;
     int compared_count = 0;
+    int max_defined_size = input_bytes*(2*comp_patch_radius + 1)*(2*comp_patch_radius + 1);
+    int defined_only_near_pos = 0;
+    int accum[input_bytes];
+    memset(accum, 0, input_bytes*sizeof(int));
+
+    Pixelel  defined_near_pos [max_defined_size];
+    Pixelel  defined_near_cand[max_defined_size];
+    Pixelel* def_n_p = defined_near_pos;
+    Pixelel* def_n_c = defined_near_cand;
 
     Pixelel* d_n_p =        data.at(position  + Coordinates(-comp_patch_radius, -comp_patch_radius));
     Pixelel* d_n_c =        data.at(candidate + Coordinates(-comp_patch_radius, -comp_patch_radius));
     Status* ds_n_p = data_status.at(position  + Coordinates(-comp_patch_radius, -comp_patch_radius));
     Status* ds_n_c = data_status.at(candidate + Coordinates(-comp_patch_radius, -comp_patch_radius));
 
+    // collect pixels defined both near pos and near candidate
+    int d_shift  = data.depth*(data.width - (comp_patch_radius<<1) - 1);
+    int ds_shift = data_status.depth*(data.width - (comp_patch_radius<<1) - 1);
     for (int oy=-comp_patch_radius; oy<=comp_patch_radius; ++oy) {
         for (int ox=-comp_patch_radius; ox<=comp_patch_radius; ++ox) {
-            // TODO: consider mirroring and rotation
             if (ds_n_c->confidence && 
                 ds_n_p->confidence)
             {
                 ++compared_count;
-                for(int j=0;j<input_bytes;j++) {
-                    int d = (int(d_n_p[j]) - int(d_n_c[j]));
-                    sum += diff_table[256 + d];
+                for(int j=0; j<input_bytes; ++j) {
+                    def_n_p[j] = d_n_p[j];
+                    def_n_c[j] = d_n_c[j];
+                    accum[j] += (int(d_n_p[j]) - int(d_n_c[j]));
                 }
+                def_n_p += input_bytes;
+                def_n_c += input_bytes;
             }  else if (!ds_n_c->confidence) {
-                sum += diff_table[0];
+                // also collect number of points defined only near destination pos
+                ++defined_only_near_pos;
             }
-            d_n_p  += data.depth;
-            d_n_c  += data.depth;
-            ds_n_p += data_status.depth;
-            ds_n_c += data_status.depth;
+            d_n_p += input_bytes;
+            d_n_c += input_bytes;
+            ++ds_n_p;
+            ++ds_n_c;
         }
-        int d_shift  = data.depth*(data.width - (comp_patch_radius<<1) - 1);
-        int ds_shift = data_status.depth*(data.width - (comp_patch_radius<<1) - 1);
         d_n_p  += d_shift;
         d_n_c  += d_shift;
         ds_n_p += ds_shift;
         ds_n_c += ds_shift;
     }
-    if (compared_count)
+
+    if (compared_count) {
+        int sum = defined_only_near_pos*diff_table[0];
+
+        for(int j=0; j<input_bytes; ++j) {
+            accum[j] /= compared_count;
+            if (accum[j] < -max_adjustment)
+                accum[j] = -max_adjustment;
+
+            if (accum[j] > max_adjustment)
+                accum[j] = max_adjustment;
+        }
+
+        if (equal_adjustment) {
+            int color_diff_sum = 0;
+            for(int j=0; j<input_bytes; ++j)
+                color_diff_sum += accum[j];
+            for(int j=0; j<input_bytes; ++j)
+                accum[j] = color_diff_sum/input_bytes;
+        }
+
+        def_n_p = defined_near_pos;
+        def_n_c = defined_near_cand;
+        for (int i=0; i<compared_count; ++i) {
+            for (int j=0; j<input_bytes; ++j) {
+                int d = int(def_n_c[j]) + accum[j];
+                // do not allow color clipping
+                if (d < 0 || d > 255)
+                    return best+1;
+                d -= int(def_n_p[j]);
+                sum += diff_table[256 + d];
+            }
+            def_n_p += input_bytes;
+            def_n_c += input_bytes;
+        }
+        if (sum < best)
+           best_color_diff.assign(accum, accum+input_bytes);
         return sum;
-    else
+    } else
         return best+1;
 }
 
@@ -304,7 +364,6 @@ static int get_gradientness(const Coordinates& position,
         grad_x[j] /= defined_ox_count;
         grad_y[j] /= defined_oy_count;
     }
-   
 
     // calculate dissimilarity with gradient
     int error_sum = 0;
@@ -327,6 +386,7 @@ static inline void try_point(const Coordinates& candidate,
                              const Coordinates& position)
 {
     int difference = get_difference(candidate, position);
+
     if (best < difference)
         return;
     best = difference;
@@ -456,33 +516,36 @@ static void run(const gchar*,
 
     comp_patch_radius     = parameters.comp_size;
     transfer_patch_radius = parameters.transfer_size;
+
+    equal_adjustment = parameters.equal_adjustment;
+    max_adjustment   = parameters.max_adjustment;
+    invent_gradients = parameters.invent_gradients;
+
     input_bytes  = drawable->bpp;
     map_bytes    = (with_map ? map_in_drawable->bpp : 0);
     map_pos      = input_bytes; //TODO: map_pos can be safely replaced with input_bytes 
     bytes        = map_pos + map_bytes;
 
     /* Fetch the whole image data */
-    {
-        fetch_image_and_mask(drawable, data, bytes, data_mask, 255, sel_x1, sel_y1, sel_x2, sel_y2);
+    fetch_image_and_mask(drawable, data, bytes, data_mask, 255, sel_x1, sel_y1, sel_x2, sel_y2);
 
-        if (with_map)
-            data.from_drawable(map_out_drawable, 0, 0, map_pos);
+    if (with_map)
+        data.from_drawable(map_out_drawable, 0, 0, map_pos);
 
-        data_status.size(data.width,data.height,1);
+    data_status.size(data.width,data.height,1);
 
-        data_points.resize(0);
+    data_points.resize(0);
 
-        for(int y=0;y<data_status.height;y++)
-            for(int x=0;x<data_status.width;x++) {
-                data_status.at(x,y)->confidence = 0;
+    for(int y=0;y<data_status.height;y++)
+        for(int x=0;x<data_status.width;x++) {
+            data_status.at(x,y)->confidence = 0;
 
-                if (parameters.use_border && data_mask.at(x,y)[0] == 0)
-                    data_status.at(x,y)->confidence = 255;
+            if (parameters.use_border && data_mask.at(x,y)[0] == 0)
+                data_status.at(x,y)->confidence = 255;
 
-                if (data_mask.at(x,y)[0] != 0)
-                    data_points.push_back(Coordinates(x,y));
-            }
-    }
+            if (data_mask.at(x,y)[0] != 0)
+                data_points.push_back(Coordinates(x,y));
+        }
 
     /* Fetch the corpus */
 
@@ -569,6 +632,7 @@ static void run(const gchar*,
                 continue;
 
             best = 1<<30;
+            best_color_diff.assign(input_bytes, 0);
 
             ///////////////////////////
             // Neighbour search BEGIN
