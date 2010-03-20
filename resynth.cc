@@ -44,6 +44,7 @@ using namespace std;
 #include "esynth_consts.h"
 #include "esynth_gimp_comm.h"
 #include "esynth_geometry.h"
+#include "bench.h"
 
 /* Helpers for the main function */
 static FILE* logfile;
@@ -184,8 +185,10 @@ void get_edge_points(vector<pair<int, Coordinates>>& edge_points)
                 if (data_status.at(position + Coordinates(ox, oy))->confidence)
                     island_flag = false;
         if (!island_flag) {
-            edge_points.push_back(std::make_pair(get_complexity(data_points[i]),
-                data_points[i]));
+            START_TIMER
+            int complexity = get_complexity(data_points[i]);
+            STOP_TIMER("get_complexity")
+            edge_points.push_back(std::make_pair(complexity, data_points[i]));
         }
     }
     sort(edge_points.begin(), edge_points.end());
@@ -225,29 +228,20 @@ void transfer_patch(const Coordinates& position, const Coordinates& source)
         }
 }
 
-// TODO: consider mirroring and rotation
-static int get_difference(const Coordinates& candidate,
-                          const Coordinates& position,
-                          vector<int>& best_color_diff)
+// TODO: consider mirroring and rotation by passing orientation
+// collect pixels defined both near pos and near candidate
+static int collect_defined_in_both_areas(const Coordinates& position, const Coordinates& candidate,
+                Pixelel* def_n_p, Pixelel* def_n_c,
+                int& defined_only_near_pos)
 {
-    int sum = 0;
-    int compared_count = 0;
-    int max_defined_size = input_bytes*(2*comp_patch_radius + 1)*(2*comp_patch_radius + 1);
-    int defined_only_near_pos = 0;
-    int accum[input_bytes];
-    memset(accum, 0, input_bytes*sizeof(int));
-
-    Pixelel  defined_near_pos [max_defined_size];
-    Pixelel  defined_near_cand[max_defined_size];
-    Pixelel* def_n_p = defined_near_pos;
-    Pixelel* def_n_c = defined_near_cand;
+    int defined_count = 0;
+    defined_only_near_pos = 0;
 
     Pixelel* d_n_p =        data.at(position  + Coordinates(-comp_patch_radius, -comp_patch_radius));
     Pixelel* d_n_c =        data.at(candidate + Coordinates(-comp_patch_radius, -comp_patch_radius));
     Status* ds_n_p = data_status.at(position  + Coordinates(-comp_patch_radius, -comp_patch_radius));
     Status* ds_n_c = data_status.at(candidate + Coordinates(-comp_patch_radius, -comp_patch_radius));
 
-    // collect pixels defined both near pos and near candidate
     int d_shift  = data.depth*(data.width - (comp_patch_radius<<1) - 1);
     int ds_shift = data_status.depth*(data.width - (comp_patch_radius<<1) - 1);
     for (int oy=-comp_patch_radius; oy<=comp_patch_radius; ++oy) {
@@ -255,15 +249,14 @@ static int get_difference(const Coordinates& candidate,
             if (ds_n_c->confidence && 
                 ds_n_p->confidence)
             {
-                ++compared_count;
+                ++defined_count;
                 for(int j=0; j<input_bytes; ++j) {
                     def_n_p[j] = d_n_p[j];
                     def_n_c[j] = d_n_c[j];
-                    accum[j] += (int(d_n_p[j]) - int(d_n_c[j]));
                 }
-                def_n_p += input_bytes;
-                def_n_c += input_bytes;
-            }  else if (!ds_n_c->confidence) {
+                def_n_p += 4;
+                def_n_c += 4;
+            } else if (!ds_n_c->confidence) {
                 // also collect number of points defined only near destination pos
                 ++defined_only_near_pos;
             }
@@ -277,11 +270,39 @@ static int get_difference(const Coordinates& candidate,
         ds_n_p += ds_shift;
         ds_n_c += ds_shift;
     }
+    return defined_count;
+}
+
+static int get_difference_color_adjustment(const Coordinates& candidate,
+                          const Coordinates& position,
+                          vector<int>& best_color_diff)
+{
+    int sum = 0;
+    int max_defined_size = 4*(2*comp_patch_radius + 1)*(2*comp_patch_radius + 1);
+    int defined_only_near_pos = 0;
+    int accum[4];
+    memset(accum, 0, 4*sizeof(int));
+
+    Pixelel  defined_near_pos [max_defined_size];
+    Pixelel  defined_near_cand[max_defined_size];
+
+    int compared_count = collect_defined_in_both_areas(position, candidate,
+            defined_near_pos, defined_near_cand, defined_only_near_pos);
 
     if (compared_count) {
         int sum = defined_only_near_pos*diff_table[0];
 
-        for(int j=0; j<input_bytes; ++j) {
+        Pixelel* def_n_p = defined_near_pos;
+        Pixelel* def_n_c = defined_near_cand;
+
+        for (int i=0; i<compared_count; ++i) {
+            for (int j=0; j<4; ++j)
+                accum[j] += (int(def_n_p[j]) - int(def_n_c[j]));
+            def_n_p += 4;
+            def_n_c += 4;
+        }
+
+        for(int j=0; j<4; ++j) {
             accum[j] /= compared_count;
             if (accum[j] < -max_adjustment)
                 accum[j] = -max_adjustment;
@@ -292,16 +313,16 @@ static int get_difference(const Coordinates& candidate,
 
         if (equal_adjustment) {
             int color_diff_sum = 0;
-            for(int j=0; j<input_bytes; ++j)
+            for(int j=0; j<4; ++j)
                 color_diff_sum += accum[j];
-            for(int j=0; j<input_bytes; ++j)
+            for(int j=0; j<4; ++j)
                 accum[j] = color_diff_sum/input_bytes;
         }
 
         def_n_p = defined_near_pos;
         def_n_c = defined_near_cand;
         for (int i=0; i<compared_count; ++i) {
-            for (int j=0; j<input_bytes; ++j) {
+            for (int j=0; j<4; ++j) {
                 int d = int(def_n_c[j]) + accum[j];
                 // do not allow color clipping
                 if (d < 0 || d > 255)
@@ -309,11 +330,47 @@ static int get_difference(const Coordinates& candidate,
                 d -= int(def_n_p[j]);
                 sum += diff_table[256 + d];
             }
-            def_n_p += input_bytes;
-            def_n_c += input_bytes;
+            def_n_p += 4;
+            def_n_c += 4;
         }
+
         if (sum < best)
            best_color_diff.assign(accum, accum+input_bytes);
+        return sum;
+    } else
+        return best+1;
+}
+
+static int get_difference(const Coordinates& candidate,
+                          const Coordinates& position)
+{
+    int sum = 0;
+    int max_defined_size = 4*(2*comp_patch_radius + 1)*(2*comp_patch_radius + 1);
+    int defined_only_near_pos = 0;
+
+    Pixelel  defined_near_pos [max_defined_size];
+    Pixelel  defined_near_cand[max_defined_size];
+
+    int compared_count = collect_defined_in_both_areas(position, candidate,
+            defined_near_pos, defined_near_cand, defined_only_near_pos);
+
+    if (compared_count) {
+        int sum = defined_only_near_pos*diff_table[0];
+
+        Pixelel* def_n_p = defined_near_pos;
+        Pixelel* def_n_c = defined_near_cand;
+
+        def_n_p = defined_near_pos;
+        def_n_c = defined_near_cand;
+        for (int i=0; i<compared_count; ++i) {
+            for (int j=0; j<4; ++j) {
+                int d = int(def_n_c[j]) - int(def_n_p[j]);
+                sum += diff_table[256 + d];
+            }
+            def_n_p += 4;
+            def_n_c += 4;
+        }
+
         return sum;
     } else
         return best+1;
@@ -392,7 +449,11 @@ static inline void try_point(const Coordinates& candidate,
                              Coordinates& best_point,
                              vector<int>& best_color_diff)
 {
-    int difference = get_difference(candidate, position, best_color_diff);
+    int difference;
+    if (max_adjustment)
+        difference = get_difference_color_adjustment(candidate, position, best_color_diff);
+    else
+        difference = get_difference(candidate, position);
 
     if (best < difference)
         return;
@@ -418,7 +479,9 @@ public:
                 x = sel_x1 + rand()%(sel_x2 - sel_x1);
                 y = sel_y1 + rand()%(sel_y2 - sel_y1);
             } while (data_mask.at(x,y)[0]);
+            START_TIMER 
             try_point(Coordinates(x, y), position_, tl_best, tl_best_point, tl_best_color_diff);
+            STOP_TIMER("try_point")
         }
 
         return tl_best_point;
