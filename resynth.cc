@@ -196,7 +196,7 @@ void get_edge_points(vector<pair<int, Coordinates>>& edge_points)
     // or interpolation.. depends on where you're looking from
 
     // leave only the most important edge_points
-    if (!invent_gradients && edge_points.size() > important_count)
+    if (edge_points.size() > important_count)
         edge_points.erase(edge_points.begin(),
             edge_points.end()-edge_points.size()/2);
 }
