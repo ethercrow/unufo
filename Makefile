@@ -5,7 +5,7 @@ GIMPTOOL = gimptool-2.0
 GIMP_LDFLAGS=`$(GIMPTOOL) --libs`
 GIMP_CFLAGS=`$(GIMPTOOL) --cflags`
 
-CXXFLAGS=$(GIMP_CFLAGS) -O3 -fno-common -ffast-math -frename-registers -fomit-frame-pointer -Wall -Wextra -pedantic -std=c++0x
+CXXFLAGS=$(GIMP_CFLAGS) -O2 -fno-common -ffast-math -frename-registers -fomit-frame-pointer -Wall -Wextra -pedantic -std=c++0x
 
 LDFLAGS=$(GIMP_LDFLAGS) -lm -lboost_thread
 
