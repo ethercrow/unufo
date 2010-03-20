@@ -34,6 +34,9 @@
 
 using namespace std;
 
+#include <boost/thread/thread.hpp>
+#include <boost/thread/future.hpp>
+
 #include <libgimp/gimp.h>
 #include <libgimp/gimpui.h>
 
@@ -224,7 +227,8 @@ void transfer_patch(const Coordinates& position, const Coordinates& source)
 
 // TODO: consider mirroring and rotation
 static int get_difference(const Coordinates& candidate,
-                          const Coordinates& position)
+                          const Coordinates& position,
+                          vector<int>& best_color_diff)
 {
     int sum = 0;
     int compared_count = 0;
@@ -383,15 +387,46 @@ static int get_gradientness(const Coordinates& position,
 }
 
 static inline void try_point(const Coordinates& candidate,
-                             const Coordinates& position)
+                             const Coordinates& position,
+                             int& best,
+                             Coordinates& best_point,
+                             vector<int>& best_color_diff)
 {
-    int difference = get_difference(candidate, position);
+    int difference = get_difference(candidate, position, best_color_diff);
 
     if (best < difference)
         return;
     best = difference;
     best_point = candidate;
 }
+
+class refine_callable
+{
+public:
+    refine_callable(int n, const Coordinates& position): n_(n), position_(position){}
+
+    Coordinates operator()() {
+        // thread local vars
+        int tl_best = 1<<30;
+        Coordinates tl_best_point;
+        vector<int> tl_best_color_diff(4, 0);
+
+        for (int j=0; j<n_; ++j) {
+            int x, y;
+            // FIXME: this will suck with large rectangular selections with small borders
+            do {
+                x = sel_x1 + rand()%(sel_x2 - sel_x1);
+                y = sel_y1 + rand()%(sel_y2 - sel_y1);
+            } while (data_mask.at(x,y)[0]);
+            try_point(Coordinates(x, y), position_, tl_best, tl_best_point, tl_best_color_diff);
+        }
+
+        return tl_best_point;
+    }
+private:
+    int n_;
+    Coordinates position_;
+};
 
 
 /* This is the main function. */
@@ -649,7 +684,7 @@ static void run(const gchar*,
                 if (wrap_or_clip(parameters, data, candidate) && 
                         data_status.at(candidate)->confidence)
                 {
-                    try_point(candidate, position);
+                    try_point(candidate, position, best, best_point, best_color_diff);
                     if (++n_neighbours >= parameters.neighbours) break;
                 }
             }
@@ -668,15 +703,27 @@ static void run(const gchar*,
             clock_gettime(CLOCK_REALTIME, &perf_tmp);
             perf_refinement -= perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
 
-            for (int j=0; j<parameters.tries; ++j) {
-                int x, y;
-                // FIXME: this will suck with large rectangular selections with small borders
-                do {
-                    x = sel_x1 + rand()%(sel_x2 - sel_x1);
-                    y = sel_y1 + rand()%(sel_y2 - sel_y1);
-                } while (data_mask.at(x,y)[0]);
-                try_point(Coordinates(x, y), position);
-            }
+
+            refine_callable refiner1(parameters.tries/2, position);
+            refine_callable refiner2(parameters.tries/2, position);
+
+            boost::packaged_task<Coordinates> refine_pt1(refiner1);
+            boost::packaged_task<Coordinates> refine_pt2(refiner2);
+
+            boost::unique_future<Coordinates> cand1_future=refine_pt1.get_future();
+            boost::unique_future<Coordinates> cand2_future=refine_pt2.get_future();
+
+            boost::thread task1_thread(boost::move(refine_pt1));
+            boost::thread task2_thread(boost::move(refine_pt2));
+
+            cand1_future.wait();
+            cand2_future.wait();
+
+            Coordinates cand1 = cand1_future.get();
+            Coordinates cand2 = cand2_future.get();
+
+            try_point(cand1, position, best, best_point, best_color_diff);
+            try_point(cand2, position, best, best_point, best_color_diff);
 
             clock_gettime(CLOCK_REALTIME, &perf_tmp);
             perf_refinement += perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
