@@ -51,7 +51,7 @@ static FILE* logfile;
 
 static int diff_table[512];
 
-static int input_bytes, map_bytes, map_pos, bytes;
+static int input_bytes;
 static int comp_patch_radius, transfer_patch_radius;
 
 static bool equal_adjustment;
@@ -503,7 +503,7 @@ static void run(const gchar*,
     static GimpParam values[1];
     Parameters parameters;
     GimpDrawable *drawable, *corpus_drawable, *map_in_drawable, *map_out_drawable;
-    bool ok, with_map;
+    bool ok;
 
     logfile = fopen("/tmp/resynth.log", "wt");
 
@@ -566,37 +566,6 @@ static void run(const gchar*,
         return;
     }
 
-    with_map = (parameters.input_map_id != -1 && parameters.output_map_id != -1);
-    map_in_drawable=0;
-    map_out_drawable=0;
-
-    if (with_map) {
-        map_in_drawable = gimp_drawable_get(parameters.input_map_id);
-        map_out_drawable = gimp_drawable_get(parameters.output_map_id);
-
-        if (map_in_drawable->bpp != map_out_drawable->bpp) {
-            gimp_message(_("The input and output maps must have the same number of color channels"));
-            ok = false;
-        } else if (map_in_drawable->width != corpus_drawable->width || 
-                map_in_drawable->height != corpus_drawable->height) {
-            gimp_message(_("The input map should be the same size as the input texture image"));
-            ok = false;
-        } else if (map_out_drawable->width != drawable->width || 
-                map_out_drawable->height != drawable->height) {
-            gimp_message(_("The output map should be the same size as the output image"));
-            ok = false;
-        }
-
-        if (!ok) {
-            gimp_drawable_detach(drawable);
-            gimp_drawable_detach(corpus_drawable);
-            gimp_drawable_detach(map_in_drawable);
-            gimp_drawable_detach(map_out_drawable);
-            values[0].data.d_status = GIMP_PDB_EXECUTION_ERROR;
-            return;
-        }
-    }
-
     /* Store parameters deep in the bowels of the GIMP */
     if (parameters.corpus_id == drawable->drawable_id)
         parameters.corpus_id = -1;
@@ -620,15 +589,9 @@ static void run(const gchar*,
     invent_gradients = parameters.invent_gradients;
 
     input_bytes  = drawable->bpp;
-    map_bytes    = (with_map ? map_in_drawable->bpp : 0);
-    map_pos      = input_bytes; //TODO: map_pos can be safely replaced with input_bytes 
-    bytes        = map_pos + map_bytes;
 
     /* Fetch the whole image data */
-    fetch_image_and_mask(drawable, data, bytes, data_mask, 255, sel_x1, sel_y1, sel_x2, sel_y2);
-
-    if (with_map)
-        data.from_drawable(map_out_drawable, 0, 0, map_pos);
+    fetch_image_and_mask(drawable, data, input_bytes, data_mask, 255, sel_x1, sel_y1, sel_x2, sel_y2);
 
     data_status.size(data.width,data.height,1);
 
@@ -647,10 +610,7 @@ static void run(const gchar*,
 
     /* Fetch the corpus */
 
-    fetch_image_and_mask(corpus_drawable, corpus, bytes, corpus_mask, 0);
-
-    if (with_map)
-        corpus.from_drawable(map_in_drawable, 0, 0, map_pos);
+    fetch_image_and_mask(corpus_drawable, corpus, input_bytes, corpus_mask, 0);
 
     /* there's some weird convention about corpus selection inversion. For now. */
     for(int y=0;y<corpus.height;y++)
@@ -866,11 +826,6 @@ static void run(const gchar*,
 
     gimp_drawable_detach(drawable);
     gimp_drawable_detach(corpus_drawable);
-
-    if (with_map) {
-        gimp_drawable_detach(map_out_drawable);
-        gimp_drawable_detach(map_in_drawable);
-    }
 
     gimp_displays_flush();
 }
