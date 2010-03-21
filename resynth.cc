@@ -50,6 +50,8 @@ using namespace std;
 static FILE* logfile;
 
 static int diff_table[512];
+static int* diff_table_0; // shifted so that diff_table_0[0] == diff_table[256] == 0
+static int max_diff;
 
 static int input_bytes;
 static int comp_patch_radius, transfer_patch_radius;
@@ -104,6 +106,8 @@ static void setup_metric(float autism)
         
         diff_table[256+i] = i*i;
     }
+    diff_table_0 = diff_table + 256;
+    max_diff = diff_table[0];
 }
 
 // structural complexity of point's neighbourhood
@@ -283,7 +287,7 @@ static int get_difference_color_adjustment(const Coordinates& candidate,
             defined_near_pos, defined_near_cand, defined_only_near_pos);
 
     if (compared_count) {
-        int sum = defined_only_near_pos*diff_table[0];
+        int sum = defined_only_near_pos*max_diff;
 
         Pixelel* def_n_p = defined_near_pos;
         Pixelel* def_n_c = defined_near_cand;
@@ -321,7 +325,7 @@ static int get_difference_color_adjustment(const Coordinates& candidate,
                 if (d < 0 || d > 255)
                     return best+1;
                 d -= int(def_n_p[j]);
-                sum += diff_table[256 + d];
+                sum += diff_table_0[d];
             }
             def_n_p += 4;
             def_n_c += 4;
@@ -347,17 +351,14 @@ static int get_difference(const Coordinates& candidate,
             defined_near_pos, defined_near_cand, defined_only_near_pos);
 
     if (compared_count) {
-        int sum = defined_only_near_pos*diff_table[0];
+        int sum = defined_only_near_pos*max_diff;
 
         Pixelel* def_n_p = defined_near_pos;
         Pixelel* def_n_c = defined_near_cand;
-
-        def_n_p = defined_near_pos;
-        def_n_c = defined_near_cand;
         for (int i=0; i<compared_count; ++i) {
             for (int j=0; j<4; ++j) {
                 int d = int(def_n_c[j]) - int(def_n_p[j]);
-                sum += diff_table[256 + d];
+                sum += diff_table_0[d];
             }
             def_n_p += 4;
             def_n_c += 4;
@@ -428,7 +429,7 @@ static int get_gradientness(const Coordinates& position,
                     int d = (data.at(near_pos)[j] - mean_values[j] - (grad_x[j]*ox) - (grad_y[j]*oy));
                     //fprintf(logfile, "\n%d, %d, %d", ox, oy, d);
                     //fflush(logfile);
-                    error_sum += diff_table[256 + d];
+                    error_sum += diff_table_0[d];
                 }
         }
 
