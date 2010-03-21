@@ -62,7 +62,7 @@ struct Bitmap {
         height = h; 
         depth = d;
 
-        delete data;
+        delete[] data;
         data = new t[w*h*d];
     }
 
