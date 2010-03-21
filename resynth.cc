@@ -229,7 +229,7 @@ void transfer_patch(const Coordinates& position, const Coordinates& source)
 
 // TODO: consider mirroring and rotation by passing orientation
 // collect pixels defined both near pos and near candidate
-static int collect_defined_in_both_areas(const Coordinates& position, const Coordinates& candidate,
+inline int collect_defined_in_both_areas(const Coordinates& position, const Coordinates& candidate,
                 Pixelel* def_n_p, Pixelel* def_n_c,
                 int& defined_only_near_pos)
 {
@@ -335,7 +335,7 @@ static int get_difference_color_adjustment(const Coordinates& candidate,
            best_color_diff.assign(accum, accum+input_bytes);
         return sum;
     } else
-        return best+1;
+        return best;
 }
 
 static int get_difference(const Coordinates& candidate,
@@ -366,7 +366,7 @@ static int get_difference(const Coordinates& candidate,
 
         return sum;
     } else
-        return best+1;
+        return best;
 }
 
 // return patch dissimilarity with linear gradient patch
@@ -448,7 +448,7 @@ static inline void try_point(const Coordinates& candidate,
     else
         difference = get_difference(candidate, position);
 
-    if (best < difference)
+    if (best <= difference)
         return;
     best = difference;
     best_point = candidate;
