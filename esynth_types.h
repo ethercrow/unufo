@@ -24,10 +24,6 @@ typedef struct Coordinates {
     }
 } Coordinates;
 
-struct Status {
-    Pixelel confidence;
-};
-
 struct Parameters {
     bool h_tile, v_tile;
     bool use_border;

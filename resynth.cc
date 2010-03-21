@@ -63,7 +63,7 @@ static bool invent_gradients;
 // using corpus_mask subset of corpus for inspiration
 // status holds current state of point filling
 static Bitmap<Pixelel> data, data_mask, corpus, corpus_mask;
-static Bitmap<Status> data_status;
+static Bitmap<uint8_t> confidence_map;
 static int sel_x1, sel_y1, sel_x2, sel_y2;
 
 // data_points is a queue of points to be filled,
@@ -118,8 +118,8 @@ static int get_complexity(const Coordinates& point)
     for (int ox=-comp_patch_radius; ox<=comp_patch_radius; ++ox)
         for (int oy=-comp_patch_radius; oy<=comp_patch_radius; ++oy) {
             Coordinates point_off = point + Coordinates(ox, oy);
-            if (data_status.at(point_off)->confidence) {
-                confidence_sum += data_status.at(point_off)->confidence;
+            if (*confidence_map.at(point_off)) {
+                confidence_sum += *confidence_map.at(point_off);
                 defined_points.push_back(point_off);
             }
         }
@@ -164,7 +164,7 @@ int purge_already_filled()
         Coordinates position = data_points[i];
 
         // check if this point has been already set
-        if (data_status.at(position)->confidence) {
+        if (*confidence_map.at(position)) {
             data_points.erase(data_points.begin() + i--);
             ++result;
         }
@@ -179,7 +179,7 @@ void get_edge_points(vector<pair<int, Coordinates>>& edge_points)
         bool island_flag = true;
         for (int ox=-1; ox<=1; ++ox)
             for (int oy=-1; oy<=1; ++oy)
-                if (data_status.at(position + Coordinates(ox, oy))->confidence)
+                if (*confidence_map.at(position + Coordinates(ox, oy)))
                     island_flag = false;
         if (!island_flag) {
             int complexity = get_complexity(data_points[i]);
@@ -207,8 +207,8 @@ void transfer_patch(const Coordinates& position, const Coordinates& source)
             Coordinates near_dst = position + offset;
             Coordinates near_src = source + offset;
             // transfer only defined points and only to undefined points
-            if (!(data_status.at(near_dst)->confidence) &&
-                data_status.at(near_src)->confidence)
+            if (!(*confidence_map.at(near_dst)) &&
+                *confidence_map.at(near_src))
             {
                 for(int j=0;j<input_bytes;j++) {
                     int new_color = data.at(near_src)[j] + best_color_diff[j];
@@ -217,8 +217,8 @@ void transfer_patch(const Coordinates& position, const Coordinates& source)
                     data.at(near_dst)[j] = new_color;
                 }
                 // TODO: better confidence transfer
-                data_status.at(near_dst)->confidence = max(10,
-                    data_status.at(near_src)->confidence - 5); 
+                *confidence_map.at(near_dst) = max(10,
+                    *confidence_map.at(near_src) - 5); 
             }
         }
 }
@@ -234,14 +234,13 @@ static int collect_defined_in_both_areas(const Coordinates& position, const Coor
 
     Pixelel* d_n_p =        data.at(position  + Coordinates(-comp_patch_radius, -comp_patch_radius));
     Pixelel* d_n_c =        data.at(candidate + Coordinates(-comp_patch_radius, -comp_patch_radius));
-    Status* ds_n_p = data_status.at(position  + Coordinates(-comp_patch_radius, -comp_patch_radius));
-    Status* ds_n_c = data_status.at(candidate + Coordinates(-comp_patch_radius, -comp_patch_radius));
+    uint8_t* ds_n_p = confidence_map.at(position  + Coordinates(-comp_patch_radius, -comp_patch_radius));
+    uint8_t* ds_n_c = confidence_map.at(candidate + Coordinates(-comp_patch_radius, -comp_patch_radius));
 
     int d_shift  = 4*(data.width - (comp_patch_radius<<1) - 1);
     for (int oy=-comp_patch_radius; oy<=comp_patch_radius; ++oy) {
         for (int ox=-comp_patch_radius; ox<=comp_patch_radius; ++ox) {
-            if (ds_n_c->confidence && 
-                ds_n_p->confidence)
+            if (*ds_n_c && *ds_n_p)
             {
                 ++defined_count;
 
@@ -251,7 +250,7 @@ static int collect_defined_in_both_areas(const Coordinates& position, const Coor
 
                 def_n_p += 4;
                 def_n_c += 4;
-            } else if (!ds_n_c->confidence) {
+            } else if (!*ds_n_c) {
                 // also collect number of points defined only near destination pos
                 ++defined_only_near_pos;
             }
@@ -386,7 +385,7 @@ static int get_gradientness(const Coordinates& position,
     for (int ox=-comp_patch_radius; ox<=comp_patch_radius; ++ox)
         for (int oy=-comp_patch_radius; oy<=comp_patch_radius; ++oy) {
             Coordinates near_pos = position + Coordinates(ox, oy);
-            if (data_status.at(near_pos)->confidence) {
+            if (*confidence_map.at(near_pos)) {
                 ++defined_count;
                 for (int j = 0; j<input_bytes; ++j)
                     mean_values[j] += data.at(near_pos)[j];
@@ -400,7 +399,7 @@ static int get_gradientness(const Coordinates& position,
     for (int ox=-comp_patch_radius; ox<=comp_patch_radius; ++ox)
         for (int oy=-comp_patch_radius; oy<=comp_patch_radius; ++oy) {
             Coordinates near_pos = position + Coordinates(ox, oy);
-            if (data_status.at(near_pos)->confidence) {
+            if (*confidence_map.at(near_pos)) {
                 if (ox) {
                     ++defined_ox_count;
                     for (int j = 0; j<input_bytes; ++j)
@@ -424,7 +423,7 @@ static int get_gradientness(const Coordinates& position,
     for (int ox=-comp_patch_radius; ox<=comp_patch_radius; ++ox)
         for (int oy=-comp_patch_radius; oy<=comp_patch_radius; ++oy) {
             Coordinates near_pos = position + Coordinates(ox, oy);
-            if (data_status.at(near_pos)->confidence) 
+            if (*confidence_map.at(near_pos)) 
                 for (int j = 0; j<input_bytes; ++j) {
                     int d = (data.at(near_pos)[j] - mean_values[j] - (grad_x[j]*ox) - (grad_y[j]*oy));
                     //fprintf(logfile, "\n%d, %d, %d", ox, oy, d);
@@ -584,16 +583,16 @@ static void run(const gchar*,
     /* Fetch the whole image data */
     fetch_image_and_mask(drawable, data, input_bytes, data_mask, 255, sel_x1, sel_y1, sel_x2, sel_y2);
 
-    data_status.size(data.width,data.height,1);
+    confidence_map.size(data.width,data.height,1);
 
     data_points.resize(0);
 
-    for(int y=0;y<data_status.height;y++)
-        for(int x=0;x<data_status.width;x++) {
-            data_status.at(x,y)->confidence = 0;
+    for(int y=0;y<confidence_map.height;y++)
+        for(int x=0;x<confidence_map.width;x++) {
+            *confidence_map.at(x,y) = 0;
 
             if (parameters.use_border && data_mask.at(x,y)[0] == 0)
-                data_status.at(x,y)->confidence = 255;
+                *confidence_map.at(x,y) = 255;
 
             if (data_mask.at(x,y)[0] != 0)
                 data_points.push_back(Coordinates(x,y));
@@ -648,7 +647,7 @@ static void run(const gchar*,
 
     int total_points = data_points.size();
 
-    fprintf(logfile, "status  dimensions: (%d, %d)\n", data_status.width, data_status.height);
+    fprintf(logfile, "status  dimensions: (%d, %d)\n", confidence_map.width, confidence_map.height);
     fprintf(logfile, "data dimensions: (%d, %d)\n", data.width, data.height);
     fprintf(logfile, "corpus dimensions: (%d, %d, %d, %d)\n", sel_x1, sel_y1, sel_x2-sel_x1, sel_y2-sel_y1);
     fprintf(logfile, "total points to be filled: %d\n", total_points);
@@ -679,7 +678,7 @@ static void run(const gchar*,
         // find best-fit patches for edge_points
         for(int i=0; i < edge_points_size; ++i) {
             Coordinates position = edge_points[i].second;
-            if (data_status.at(position)->confidence)
+            if (*confidence_map.at(position))
                 continue;
 
             best = 1<<30;
@@ -698,7 +697,7 @@ static void run(const gchar*,
             for(int j=0;j<sorted_offsets_size;j++) {
                 Coordinates candidate = position + sorted_offsets[j];
                 if (wrap_or_clip(parameters, data, candidate) && 
-                        data_status.at(candidate)->confidence)
+                        *confidence_map.at(candidate))
                 {
                     START_TIMER
                     try_point(candidate, position, best, best_point, best_color_diff);
@@ -766,10 +765,10 @@ static void run(const gchar*,
                 for (int ox=-transfer_patch_radius; ox<=transfer_patch_radius; ++ox)
                     for (int oy=-transfer_patch_radius; oy<=transfer_patch_radius; ++oy) {
                         Coordinates near_pos = position + Coordinates(ox, oy);
-                        if (!data_status.at(near_pos)->confidence) {
+                        if (!*confidence_map.at(near_pos)) {
                             for (int j = 0; j<input_bytes; ++j)
                                 data.at(near_pos)[j] = mean_values[j] + (grad_x[j]*ox) + (grad_y[j]*oy);
-                            data_status.at(near_pos)->confidence = 20;
+                            *confidence_map.at(near_pos) = 20;
                         }
                     }
             } else
