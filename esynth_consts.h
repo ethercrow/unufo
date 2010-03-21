@@ -2,12 +2,10 @@
 #define ESYNTH_CONSTS_H
 
 const int max_neighbours         = 40000;
-const int max_trys_per_pixel     = 40000;
 
-const int max_comp_patch_radius      = 3;
-const int max_transfer_patch_radius  = 2;
-
-const size_t important_count        = 6;
+const int max_threads = 4;
+const bool update_undo_stack         = false;
+const size_t important_count         = 6;
 
 #endif // ESYNTH_CONSTS_H
 

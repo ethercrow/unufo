@@ -94,7 +94,7 @@ static void make_offset_list(void)
     sort(sorted_offsets.begin(), sorted_offsets.end());
 }
 
-static void setup_metric(float autism, float map_weight)
+static void setup_metric(float autism)
 {
     // TODO: improve patch difference metric
     for(int i=-256;i<256;i++) {
@@ -182,9 +182,7 @@ void get_edge_points(vector<pair<int, Coordinates>>& edge_points)
                 if (data_status.at(position + Coordinates(ox, oy))->confidence)
                     island_flag = false;
         if (!island_flag) {
-            START_TIMER
             int complexity = get_complexity(data_points[i]);
-            STOP_TIMER("get_complexity")
             edge_points.push_back(std::make_pair(complexity, data_points[i]));
         }
     }
@@ -274,7 +272,6 @@ static int get_difference_color_adjustment(const Coordinates& candidate,
                           const Coordinates& position,
                           vector<int>& best_color_diff)
 {
-    int sum = 0;
     int max_defined_size = 4*(2*comp_patch_radius + 1)*(2*comp_patch_radius + 1);
     int defined_only_near_pos = 0;
     int accum[4];
@@ -341,7 +338,6 @@ static int get_difference_color_adjustment(const Coordinates& candidate,
 static int get_difference(const Coordinates& candidate,
                           const Coordinates& position)
 {
-    int sum = 0;
     int max_defined_size = 4*(2*comp_patch_radius + 1)*(2*comp_patch_radius + 1);
     int defined_only_near_pos = 0;
 
@@ -476,9 +472,7 @@ public:
                 x = sel_x1 + rand()%(sel_x2 - sel_x1);
                 y = sel_y1 + rand()%(sel_y2 - sel_y1);
             } while (data_mask.at(x,y)[0]);
-            START_TIMER 
             try_point(Coordinates(x, y), position_, tl_best, tl_best_point, tl_best_color_diff);
-            STOP_TIMER("try_point")
         }
 
         return tl_best_point;
@@ -499,7 +493,7 @@ static void run(const gchar*,
 {
     static GimpParam values[1];
     Parameters parameters;
-    GimpDrawable *drawable, *corpus_drawable, *map_in_drawable, *map_out_drawable;
+    GimpDrawable *drawable, *corpus_drawable;
     bool ok;
 
     logfile = fopen("/tmp/resynth.log", "wt");
@@ -648,7 +642,7 @@ static void run(const gchar*,
 
     make_offset_list();
 
-    setup_metric(parameters.autism, parameters.map_weight);
+    setup_metric(parameters.autism);
 
     /* Do it */
 
@@ -673,7 +667,9 @@ static void run(const gchar*,
         // first element in pair is complexity of point neighbourhood
         vector<pair<int, Coordinates>> edge_points(0);
 
+        START_TIMER
         get_edge_points(edge_points);
+        STOP_TIMER("get_edge_points")
         size_t edge_points_size = edge_points.size();
 
         clock_gettime(CLOCK_REALTIME, &perf_tmp);
@@ -704,7 +700,9 @@ static void run(const gchar*,
                 if (wrap_or_clip(parameters, data, candidate) && 
                         data_status.at(candidate)->confidence)
                 {
+                    START_TIMER
                     try_point(candidate, position, best, best_point, best_color_diff);
+                    STOP_TIMER("try_point")
                     if (++n_neighbours >= parameters.neighbours) break;
                 }
             }
@@ -723,27 +721,27 @@ static void run(const gchar*,
             clock_gettime(CLOCK_REALTIME, &perf_tmp);
             perf_refinement -= perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
 
+            /*
+            vector<boost::shared_future<Coordinates>> futures(0);
+            for (int t=0; t<max_threads; ++t) {
+                refine_callable refiner(parameters.tries/max_threads, position);
+                boost::packaged_task<Coordinates> pt(refiner);
+                boost::shared_future<Coordinates> f = pt.get_future();
+                boost::thread refine_thread(boost::move(pt));
+                futures.push_back(f);
+            }
+            boost::wait_for_all(futures.begin(), futures.end());
 
-            refine_callable refiner1(parameters.tries/2, position);
-            refine_callable refiner2(parameters.tries/2, position);
 
-            boost::packaged_task<Coordinates> refine_pt1(refiner1);
-            boost::packaged_task<Coordinates> refine_pt2(refiner2);
+            for (int t=0; t<max_threads; ++t) {
+                const Coordinates cand = futures[t].get();
+                try_point(cand, position, best, best_point, best_color_diff);
+            }
+            */
 
-            boost::unique_future<Coordinates> cand1_future=refine_pt1.get_future();
-            boost::unique_future<Coordinates> cand2_future=refine_pt2.get_future();
-
-            boost::thread task1_thread(boost::move(refine_pt1));
-            boost::thread task2_thread(boost::move(refine_pt2));
-
-            cand1_future.wait();
-            cand2_future.wait();
-
-            Coordinates cand1 = cand1_future.get();
-            Coordinates cand2 = cand2_future.get();
-
-            try_point(cand1, position, best, best_point, best_color_diff);
-            try_point(cand2, position, best, best_point, best_color_diff);
+            refine_callable refiner(parameters.tries, position);
+            Coordinates cand = refiner();
+            try_point(cand, position, best, best_point, best_color_diff);
 
             clock_gettime(CLOCK_REALTIME, &perf_tmp);
             perf_refinement += perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
@@ -788,19 +786,22 @@ static void run(const gchar*,
 
         if (!edge_points_size)
             break;
-        clock_gettime(CLOCK_REALTIME, &perf_tmp);
-        perf_fill_undo -= perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
 
-        /* Write result to region */
-        data.to_drawable(drawable, 0,0, 0);
+        if (update_undo_stack) {
+            clock_gettime(CLOCK_REALTIME, &perf_tmp);
+            perf_fill_undo -= perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
 
-        /* Voodoo to update actual image */
-        gimp_drawable_flush(drawable);
-        gimp_drawable_merge_shadow(drawable->drawable_id,TRUE);
-        gimp_drawable_update(drawable->drawable_id,0,0,data.width,data.height);
+            /* Write result to region */
+            data.to_drawable(drawable, 0,0, 0);
 
-        clock_gettime(CLOCK_REALTIME, &perf_tmp);
-        perf_fill_undo += perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
+            /* Voodoo to update actual image */
+            gimp_drawable_flush(drawable);
+            gimp_drawable_merge_shadow(drawable->drawable_id,TRUE);
+            gimp_drawable_update(drawable->drawable_id,0,0,data.width,data.height);
+
+            clock_gettime(CLOCK_REALTIME, &perf_tmp);
+            perf_fill_undo += perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
+        }
     }
 
     fprintf(logfile, "\n%d points left unfilled\n", points_to_go);
