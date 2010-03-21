@@ -63,11 +63,11 @@ struct Bitmap {
         depth = d;
 
         delete[] data;
-        data = new t[w*h*d];
+        data = new t[w*h*4];
     }
 
     t *at(int x,int y) const {
-        return data + (y*width+x)*depth;
+        return data + (y*width+x)*4;
     }
 
     t *at(const Coordinates position) const {
@@ -86,7 +86,7 @@ struct Bitmap {
 
         for(i=0;i<width*height;i++)
             for(j=0;j<int(drawable->bpp);j++)
-                img[i*drawable->bpp+j] = data[i*depth+src_layer+j];
+                img[i*drawable->bpp+j] = data[i*4+src_layer+j];
 
         gimp_pixel_rgn_set_rect(&region, img, x1,y1,width,height);
 
@@ -106,7 +106,7 @@ struct Bitmap {
 
         for(i=0;i<width*height;i++)
             for(j=0;j<(int)(drawable->bpp);j++)
-                data[i*depth+dest_layer+j] = img[i*drawable->bpp+j];
+                data[i*4+dest_layer+j] = img[i*drawable->bpp+j];
 
         delete[] img;
     }

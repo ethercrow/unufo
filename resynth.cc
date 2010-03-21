@@ -62,9 +62,6 @@ static bool invent_gradients;
 // we must fill selection subset of data
 // using corpus_mask subset of corpus for inspiration
 // status holds current state of point filling
-
-
-        
 static Bitmap<Pixelel> data, data_mask, corpus, corpus_mask;
 static Bitmap<Status> data_status;
 static int sel_x1, sel_y1, sel_x2, sel_y2;
@@ -242,33 +239,33 @@ static int collect_defined_in_both_areas(const Coordinates& position, const Coor
     Status* ds_n_p = data_status.at(position  + Coordinates(-comp_patch_radius, -comp_patch_radius));
     Status* ds_n_c = data_status.at(candidate + Coordinates(-comp_patch_radius, -comp_patch_radius));
 
-    int d_shift  = data.depth*(data.width - (comp_patch_radius<<1) - 1);
-    int ds_shift = data_status.depth*(data.width - (comp_patch_radius<<1) - 1);
+    int d_shift  = 4*(data.width - (comp_patch_radius<<1) - 1);
     for (int oy=-comp_patch_radius; oy<=comp_patch_radius; ++oy) {
         for (int ox=-comp_patch_radius; ox<=comp_patch_radius; ++ox) {
             if (ds_n_c->confidence && 
                 ds_n_p->confidence)
             {
                 ++defined_count;
-                for(int j=0; j<input_bytes; ++j) {
-                    def_n_p[j] = d_n_p[j];
-                    def_n_c[j] = d_n_c[j];
-                }
+
+                // 4 byte copy
+                *((int32_t*)def_n_p) = *((int32_t*)d_n_p);
+                *((int32_t*)def_n_c) = *((int32_t*)d_n_c);
+
                 def_n_p += 4;
                 def_n_c += 4;
             } else if (!ds_n_c->confidence) {
                 // also collect number of points defined only near destination pos
                 ++defined_only_near_pos;
             }
-            d_n_p += input_bytes;
-            d_n_c += input_bytes;
-            ++ds_n_p;
-            ++ds_n_c;
+            d_n_p  += 4;
+            d_n_c  += 4;
+            ds_n_p += 4;
+            ds_n_c += 4;
         }
         d_n_p  += d_shift;
         d_n_c  += d_shift;
-        ds_n_p += ds_shift;
-        ds_n_c += ds_shift;
+        ds_n_p += d_shift;
+        ds_n_c += d_shift;
     }
     return defined_count;
 }
