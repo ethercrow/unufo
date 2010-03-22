@@ -62,7 +62,8 @@ void fetch_image_and_mask(GimpDrawable *drawable, Bitmap<Pixelel> &image, int by
 
 /* Restore the last parameters used from deep in the bowels of
    the main GIMP app */
-static bool get_last_parameters(Parameters *param, int default_drawable) {
+static bool get_last_parameters(Parameters *param, int default_drawable)
+{
     /* Defaults in case this is our first run */
     param->corpus_id        = -1;
     param->input_map_id     = -1;
@@ -79,6 +80,8 @@ static bool get_last_parameters(Parameters *param, int default_drawable) {
     param->invent_gradients = 0;
     param->max_adjustment   = 20;
     param->equal_adjustment = 1;
+    param->use_ref_layer    = 0;
+    param->ref_layer_id     = 1;
 
     gimp_get_data("plug_in_resynthesizer", param);
 
@@ -91,8 +94,9 @@ static bool get_last_parameters(Parameters *param, int default_drawable) {
 }
 
 /* Convert argument list into parameters */
-static bool get_parameters_from_list(Parameters *param, int n_args, const GimpParam *args) {
-    if (n_args != 18)
+static bool get_parameters_from_list(Parameters *param, int n_args, const GimpParam *args)
+{
+    if (n_args != 20)
         return false;
 
     param->v_tile           = args[3].data.d_int32;
@@ -110,6 +114,8 @@ static bool get_parameters_from_list(Parameters *param, int n_args, const GimpPa
     param->invent_gradients = args[15].data.d_int32;
     param->max_adjustment   = args[16].data.d_int32;
     param->equal_adjustment = args[17].data.d_int32;
+    param->use_ref_layer    = args[18].data.d_int32;
+    param->ref_layer_id     = args[19].data.d_int32;
 
     return true;
 }
@@ -117,10 +123,10 @@ static bool get_parameters_from_list(Parameters *param, int n_args, const GimpPa
 /* Talking to GIMP stuff */
 
 static void run(const gchar *name,
-        gint nparams,
-        const GimpParam *param,
-        gint *nreturn_vals,
-        GimpParam **return_vals);
+    gint nparams,
+    const GimpParam *param,
+    gint *nreturn_vals,
+    GimpParam **return_vals);
 
 static void query();
 static GimpPlugInInfo PLUG_IN_INFO = {
@@ -134,7 +140,8 @@ static GimpPlugInInfo PLUG_IN_INFO = {
 MAIN()
 
 /* Add capabilities of this plugin to Procedural DataBase */
-static void query() {
+static void query()
+{
     static GimpParamDef args[] = {
         { GIMP_PDB_INT32, "run_mode", "Interactive, non-interactive" },
         { GIMP_PDB_IMAGE, "image", "Input image" },
@@ -154,7 +161,9 @@ static void query() {
         { GIMP_PDB_INT32, "transfer_size", "Size of transfer unit" },
         { GIMP_PDB_INT32, "invent_gradients", "Invent gradients" },
         { GIMP_PDB_INT32, "max_adjustment", "Max color adjustment applied to transferred patch" },
-        { GIMP_PDB_INT32, "equal_adjustment", "Adjust only overall brightness, not separate colors (expect weird alpha)" }
+        { GIMP_PDB_INT32, "equal_adjustment", "Adjust only overall brightness, not separate colors (expect weird alpha)" },
+        { GIMP_PDB_INT32, "use_ref_layer", "Use manually defined reference area" },
+        { GIMP_PDB_DRAWABLE, "ref_layer_id", "Reference map layer" }
     };
 
     GimpParamDef *return_vals = NULL;
@@ -162,21 +171,22 @@ static void query() {
     gint nreturn_vals = 0;
 
     gimp_install_procedure("plug-in-resynthesizer",
-            "Make tiles,"
-            "apply themes to images, "
-            "remove unwanted features, etc.",
-            "",
-            "Paul Francis Harrison",
-            "Paul Francis Harrison",
-            "2000",
-            "<Image>/Filters/Map/Resynthesize...",
-            "RGB*, GRAY*",
-            GIMP_PLUGIN,
-            nargs, nreturn_vals,
-            args, return_vals);
+        "Make tiles,"
+        "apply themes to images, "
+        "remove unwanted features, etc.",
+        "",
+        "Paul Francis Harrison",
+        "Paul Francis Harrison",
+        "2000",
+        "<Image>/Filters/Map/Resynthesize...",
+        "RGB*, GRAY*",
+        GIMP_PLUGIN,
+        nargs, nreturn_vals,
+        args, return_vals);
 }
 
-static void init_gtk() {
+static void init_gtk()
+{
     int argc = 1;
     char **argv = g_new(char*,2);
     argv[0] = "resynthesizer";
@@ -184,7 +194,6 @@ static void init_gtk() {
     gtk_init(&argc, &argv);
     gtk_rc_parse(gimp_gtkrc());
 }
-
 
 #endif //ESYNTH_GIMP_COMM_H
 

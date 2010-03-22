@@ -29,7 +29,7 @@
 
 
 (define (script-fu-smart-remove img layer corpus-border neighbour-count random-tries-count
-         comp-size transfer-size invent-gradients max-adjust equal-adjust)
+         comp-size transfer-size invent-gradients max-adjust equal-adjust use-ref-layer ref-layer-id)
   (cond
     ((= 0 (car (gimp-selection-bounds img))) 
       (gimp-message "To use this script-fu, first select the region you wish to remove.")
@@ -110,6 +110,8 @@
         invent-gradients
         max-adjust
         equal-adjust
+        use-ref-layer
+        ref-layer-id
       )
 
       (gimp-image-delete dupe)
@@ -134,5 +136,7 @@ Requires separate resynthesizer plug-in."
 		    SF-TOGGLE "Invent gradients (may greatly help in plain areas without texture)" FALSE
 		    SF-ADJUSTMENT "Max color adjustment applied to transferred patch" '(0 0 255 1.0 2.0 0 1)
 		    SF-TOGGLE "Apply the same amount of adjustment to all channels (expect weird alpha)" FALSE
+		    SF-TOGGLE "Use manually defined reference area" FALSE
+		    SF-DRAWABLE "Reference map layer" 1
 )
 

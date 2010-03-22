@@ -472,6 +472,7 @@ public:
                 x = sel_x1 + rand()%(sel_x2 - sel_x1);
                 y = sel_y1 + rand()%(sel_y2 - sel_y1);
             } while (data_mask.at(x,y)[0]);
+            // TODO: while (*reference_mask.at(x,y));
             try_point(Coordinates(x, y), position_, tl_best, tl_best_point, tl_best_color_diff);
         }
 
@@ -493,12 +494,10 @@ static void run(const gchar*,
 {
     static GimpParam values[1];
     Parameters parameters;
-    GimpDrawable *drawable, *corpus_drawable;
-    bool ok;
+    GimpDrawable *drawable, *corpus_drawable, *ref_drawable;
 
     logfile = fopen("/tmp/resynth.log", "wt");
 
-    fprintf(logfile, "gimp setup dragons begin");
     //////////////////////////////
     // Gimp setup dragons BEGIN
     //////////////////////////////
@@ -512,40 +511,29 @@ static void run(const gchar*,
     values[0].type = GIMP_PDB_STATUS;
     values[0].data.d_status = GIMP_PDB_SUCCESS;
 
-    fprintf(logfile, "init_gtk");
     init_gtk();
 
     /* Get drawable */
-    fprintf(logfile, "get drawable\n");
     drawable = gimp_drawable_get(param[2].data.d_drawable);
 
     if (!gimp_drawable_is_rgb(drawable->drawable_id) &&
             !gimp_drawable_is_gray(drawable->drawable_id)) {
+        fprintf(logfile, "bad color mode\n");
         gimp_drawable_detach(drawable);
         values[0].data.d_status = GIMP_PDB_EXECUTION_ERROR;
         return;
     }
 
-    /* Deal with run mode (parameter zero) */
-    fprintf(logfile, "before get_parameters %d\n", param[0].data.d_int32);
-    ok = false;
-    switch(param[0].data.d_int32) {
-        case GIMP_RUN_NONINTERACTIVE :
-            ok = get_parameters_from_list(&parameters, nparams, param); 
-            break;
-        case GIMP_RUN_WITH_LAST_VALS :
-            ok = get_last_parameters(&parameters,drawable->drawable_id); 
-            break;
-    }
-    fprintf(logfile, "after get_parameters\n");
-
-    if (!ok) {
-        fprintf(logfile, "Panic!\n");
+    if (!get_parameters_from_list(&parameters, nparams, param)) {
+        fprintf(logfile, "get_parameters_from_list failed\n");
         gimp_drawable_detach(drawable);
         values[0].data.d_status = GIMP_PDB_EXECUTION_ERROR;
         return;
     }
 
+    if (parameters.use_ref_layer) {
+        ref_drawable = gimp_drawable_get(parameters.ref_layer_id);
+    }
 
     corpus_drawable = gimp_drawable_get(parameters.corpus_id);
     if (corpus_drawable->bpp != drawable->bpp) {
@@ -567,10 +555,6 @@ static void run(const gchar*,
     gimp_progress_init(_("Resynthesize"));
     gimp_progress_update(0.0);
 
-    fprintf(logfile, "gimp setup dragons end\n");
-    //////////////////////////////
-    // Gimp setup dragons END
-    //////////////////////////////
 
     comp_patch_radius     = parameters.comp_size;
     transfer_patch_radius = parameters.transfer_size;
@@ -603,10 +587,18 @@ static void run(const gchar*,
 
     fetch_image_and_mask(corpus_drawable, corpus, input_bytes, corpus_mask, 0);
 
+    // Fetch reference_mask layer
+    fetch_image_and_mask(corpus_drawable, corpus, input_bytes, corpus_mask, 0);
+
     /* there's some weird convention about corpus selection inversion. For now. */
     for(int y=0;y<corpus.height;y++)
         for(int x=0;x<corpus.width;x++)
             corpus_mask.at(x,y)[0] = 255 - corpus_mask.at(x,y)[0];
+
+    fprintf(logfile, "gimp setup dragons end\n");
+    //////////////////////////////
+    // Gimp setup dragons END
+    //////////////////////////////
 
     /* little geometry so that sel_x1 and sel_y1 are now corpus_offset */
 
