@@ -62,6 +62,7 @@ struct Bitmap {
 
         delete[] data;
         data = new t[w*h*4];
+        memset(data, 0, w*h*4*sizeof(t));
     }
 
     t *at(int x,int y) const {

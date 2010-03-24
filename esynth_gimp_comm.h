@@ -115,7 +115,6 @@ static bool get_parameters_from_list(Parameters *param, int n_args, const GimpPa
     param->max_adjustment   = args[16].data.d_int32;
     param->equal_adjustment = args[17].data.d_int32;
     param->use_ref_layer    = args[18].data.d_int32;
-    param->ref_layer_id     = args[19].data.d_int32;
 
     return true;
 }
@@ -163,6 +162,7 @@ static void query()
         { GIMP_PDB_INT32, "max_adjustment", "Max color adjustment applied to transferred patch" },
         { GIMP_PDB_INT32, "equal_adjustment", "Adjust only overall brightness, not separate colors (expect weird alpha)" },
         { GIMP_PDB_INT32, "use_ref_layer", "Use manually defined reference area" },
+
         { GIMP_PDB_DRAWABLE, "ref_layer_id", "Reference map layer" }
     };
 

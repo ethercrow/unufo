@@ -60,11 +60,12 @@ static bool equal_adjustment;
 static int max_adjustment;
 
 static bool invent_gradients;
+static bool use_ref_layer;
 
 // we must fill selection subset of data
-// using corpus_mask subset of corpus for inspiration
+// using ref_mask subset of ref_layer for inspiration
 // status holds current state of point filling
-static Bitmap<Pixelel> data, data_mask, corpus, corpus_mask;
+static Bitmap<Pixelel> data, data_mask, ref_layer, ref_mask;
 static Bitmap<uint8_t> confidence_map;
 static int sel_x1, sel_y1, sel_x2, sel_y2;
 
@@ -75,6 +76,7 @@ static int sel_x1, sel_y1, sel_x2, sel_y2;
 // and sorted by distance from origin (see Coordinates::operator< for 
 // current definition of 'distance')
 static vector<Coordinates> data_points, sorted_offsets;
+static vector<Coordinates> ref_points(0);
 
 static int best;
 static Coordinates best_point;
@@ -278,7 +280,9 @@ static int get_difference_color_adjustment(const Coordinates& candidate,
     int max_defined_size = 4*(2*comp_patch_radius + 1)*(2*comp_patch_radius + 1);
     int defined_only_near_pos = 0;
     int accum[4];
-    memset(accum, 0, 4*sizeof(int));
+    //memset(accum, 0, 4*sizeof(int));
+    *((int64_t*)accum) = 0LL;
+    *((int64_t*)accum+1) = 0LL;
 
     Pixelel  defined_near_pos [max_defined_size];
     Pixelel  defined_near_cand[max_defined_size];
@@ -360,6 +364,7 @@ static int get_difference(const Coordinates& candidate,
                 int d = int(def_n_c[j]) - int(def_n_p[j]);
                 sum += diff_table_0[d];
             }
+
             def_n_p += 4;
             def_n_c += 4;
         }
@@ -465,15 +470,21 @@ public:
         Coordinates tl_best_point;
         vector<int> tl_best_color_diff(4, 0);
 
-        for (int j=0; j<n_; ++j) {
-            int x, y;
-            // FIXME: this will suck with large rectangular selections with small borders
-            do {
-                x = sel_x1 + rand()%(sel_x2 - sel_x1);
-                y = sel_y1 + rand()%(sel_y2 - sel_y1);
-            } while (data_mask.at(x,y)[0]);
-            // TODO: while (*reference_mask.at(x,y));
-            try_point(Coordinates(x, y), position_, tl_best, tl_best_point, tl_best_color_diff);
+        if (use_ref_layer) {
+            for (int j=0; j<n_; ++j) {
+                const Coordinates& candidate = ref_points[rand()%ref_points.size()];
+                try_point(candidate, position_, tl_best, tl_best_point, tl_best_color_diff);
+            }
+        } else {
+            for (int j=0; j<n_; ++j) {
+                int x, y;
+                // FIXME: this will suck with large rectangular selections with small borders
+                do {
+                    x = sel_x1 + rand()%(sel_x2 - sel_x1);
+                    y = sel_y1 + rand()%(sel_y2 - sel_y1);
+                } while (data_mask.at(x,y)[0]);
+                try_point(Coordinates(x, y), position_, tl_best, tl_best_point, tl_best_color_diff);
+            }
         }
 
         return tl_best_point;
@@ -513,31 +524,25 @@ static void run(const gchar*,
 
     init_gtk();
 
+    if (!get_parameters_from_list(&parameters, nparams, param)) {
+        fprintf(logfile, "get_parameters_from_list failed\n");
+        values[0].data.d_status = GIMP_PDB_EXECUTION_ERROR;
+        return;
+    }
+
     /* Get drawable */
     drawable = gimp_drawable_get(param[2].data.d_drawable);
 
     if (!gimp_drawable_is_rgb(drawable->drawable_id) &&
             !gimp_drawable_is_gray(drawable->drawable_id)) {
-        fprintf(logfile, "bad color mode\n");
+        gimp_message(_("Bad color mode, must be RGB* or GRAY*"));
         gimp_drawable_detach(drawable);
         values[0].data.d_status = GIMP_PDB_EXECUTION_ERROR;
         return;
-    }
-
-    if (!get_parameters_from_list(&parameters, nparams, param)) {
-        fprintf(logfile, "get_parameters_from_list failed\n");
-        gimp_drawable_detach(drawable);
-        values[0].data.d_status = GIMP_PDB_EXECUTION_ERROR;
-        return;
-    }
-
-    if (parameters.use_ref_layer) {
-        ref_drawable = gimp_drawable_get(parameters.ref_layer_id);
     }
 
     corpus_drawable = gimp_drawable_get(parameters.corpus_id);
     if (corpus_drawable->bpp != drawable->bpp) {
-        fprintf(logfile, "get corpus failed");
         gimp_message(_("The input texture and output image must have the same number of color channels."));
         gimp_drawable_detach(drawable);
         gimp_drawable_detach(corpus_drawable);
@@ -545,16 +550,14 @@ static void run(const gchar*,
         return;
     }
 
-    /* Store parameters deep in the bowels of the GIMP */
-    if (parameters.corpus_id == drawable->drawable_id)
-        parameters.corpus_id = -1;
+    use_ref_layer = parameters.use_ref_layer;
 
-    if (parameters.corpus_id == -1)
-        parameters.corpus_id = drawable->drawable_id;
+    if (use_ref_layer) {
+        ref_drawable = gimp_drawable_get(param[19].data.d_drawable);
+    }
 
     gimp_progress_init(_("Resynthesize"));
     gimp_progress_update(0.0);
-
 
     comp_patch_radius     = parameters.comp_size;
     transfer_patch_radius = parameters.transfer_size;
@@ -583,17 +586,22 @@ static void run(const gchar*,
                 data_points.push_back(Coordinates(x,y));
         }
 
-    /* Fetch the corpus */
+    /* Fetch the ref_layer */
 
-    fetch_image_and_mask(corpus_drawable, corpus, input_bytes, corpus_mask, 0);
-
-    // Fetch reference_mask layer
-    fetch_image_and_mask(corpus_drawable, corpus, input_bytes, corpus_mask, 0);
-
-    /* there's some weird convention about corpus selection inversion. For now. */
-    for(int y=0;y<corpus.height;y++)
-        for(int x=0;x<corpus.width;x++)
-            corpus_mask.at(x,y)[0] = 255 - corpus_mask.at(x,y)[0];
+    if (!parameters.use_ref_layer) {
+        // resynthesizer legacy
+        fetch_image_and_mask(corpus_drawable, ref_layer, input_bytes, ref_mask, 0);
+    } else {
+        // Fetch reference_mask layer
+        fetch_image_and_mask(ref_drawable, ref_layer, input_bytes, ref_mask, 0);
+        for(int y=0;y<ref_layer.height;y++)
+            for(int x=0;x<ref_layer.width;x++)
+                if ((ref_layer.at(x,y)[0] | ref_layer.at(x,y)[3]) &&
+                    !data_mask.at(x,y)[0])
+                {
+                    ref_points.push_back(Coordinates(x,y));
+                }
+    }
 
     fprintf(logfile, "gimp setup dragons end\n");
     //////////////////////////////
@@ -608,13 +616,13 @@ static void run(const gchar*,
     if (sel_y2 >= data.height - max(comp_patch_radius, transfer_patch_radius))
         sel_y2 = data.height - max(comp_patch_radius, transfer_patch_radius) - 1;
 
-    sel_x1 -= (corpus.width  - (sel_x2-sel_x1))/2;
+    sel_x1 -= (ref_layer.width  - (sel_x2-sel_x1))/2;
     sel_x1 = max(max(comp_patch_radius, transfer_patch_radius), sel_x1);
-    sel_y1 -= (corpus.height - (sel_y2-sel_y1))/2;
+    sel_y1 -= (ref_layer.height - (sel_y2-sel_y1))/2;
     sel_y1 = max(max(comp_patch_radius, transfer_patch_radius), sel_y1);
 
-    sel_x2 = min(sel_x1 + corpus.width, data.width - max(comp_patch_radius, transfer_patch_radius) - 1);
-    sel_y2 = min(sel_y1 + corpus.height, data.height - max(comp_patch_radius, transfer_patch_radius) - 1);
+    sel_x2 = min(sel_x1 + ref_layer.width, data.width - max(comp_patch_radius, transfer_patch_radius) - 1);
+    sel_y2 = min(sel_y1 + ref_layer.height, data.height - max(comp_patch_radius, transfer_patch_radius) - 1);
 
     /* Sanity check */
 
@@ -642,7 +650,7 @@ static void run(const gchar*,
 
     fprintf(logfile, "status  dimensions: (%d, %d)\n", confidence_map.width, confidence_map.height);
     fprintf(logfile, "data dimensions: (%d, %d)\n", data.width, data.height);
-    fprintf(logfile, "corpus dimensions: (%d, %d, %d, %d)\n", sel_x1, sel_y1, sel_x2-sel_x1, sel_y2-sel_y1);
+    fprintf(logfile, "ref_layer dimensions: (%d, %d, %d, %d)\n", sel_x1, sel_y1, sel_x2-sel_x1, sel_y2-sel_y1);
     fprintf(logfile, "total points to be filled: %d\n", total_points);
     fflush(logfile);
 
