@@ -7,7 +7,7 @@ GIMP_CFLAGS=`$(GIMPTOOL) --cflags`
 
 CXXFLAGS=$(GIMP_CFLAGS) -O2 -fno-common -ffast-math -frename-registers -fomit-frame-pointer -Wall -Wextra -pedantic -std=c++0x
 
-LDFLAGS=$(GIMP_LDFLAGS) -lm -lboost_thread
+LDFLAGS=$(GIMP_LDFLAGS) -lm #-lboost_thread
 
 
 all: resynth

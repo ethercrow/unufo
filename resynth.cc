@@ -34,8 +34,8 @@
 
 using namespace std;
 
-#include <boost/thread/thread.hpp>
-#include <boost/thread/future.hpp>
+//#include <boost/thread/thread.hpp>
+//#include <boost/thread/future.hpp>
 
 #include <libgimp/gimp.h>
 #include <libgimp/gimpui.h>
