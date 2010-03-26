@@ -3,7 +3,18 @@
 
 #include "esynth_types.h"
 
-bool wrap_or_clip(Parameters &parameters, Bitmap<Pixelel> &image, Coordinates &point) { 
+inline bool clip(Bitmap<Pixelel> &image, const Coordinates& point)
+{
+    if (point.x < 0 ||
+        point.y < 0 ||
+        point.x >= image.width ||
+        point.y >= image.height)
+        return false;
+    return true;
+}
+
+bool wrap_or_clip(Parameters &parameters, Bitmap<Pixelel> &image, Coordinates &point)
+{ 
     while(point.x < 0)
         if (parameters.h_tile)
             point.x += image.width;

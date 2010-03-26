@@ -213,7 +213,8 @@ void transfer_patch(const Coordinates& position, const Coordinates& source)
             Coordinates near_dst = position + offset;
             Coordinates near_src = source + offset;
             // transfer only defined points and only to undefined points
-            if (!(*confidence_map.at(near_dst)) &&
+            if (clip(data, near_dst) && clip(data, near_src) &&
+                !(*confidence_map.at(near_dst)) &&
                 *confidence_map.at(near_src))
             {
                 for(int j=0;j<input_bytes;j++) {
@@ -246,19 +247,29 @@ inline int collect_defined_in_both_areas(const Coordinates& position, const Coor
     int d_shift  = 4*(data.width - (comp_patch_radius<<1) - 1);
     for (int oy=-comp_patch_radius; oy<=comp_patch_radius; ++oy) {
         for (int ox=-comp_patch_radius; ox<=comp_patch_radius; ++ox) {
-            if (*ds_n_c && *ds_n_p)
+            if (position.x + ox >= 0 &&
+                position.y + oy >= 0 &&
+                position.x + ox < data.width &&
+                position.y + oy < data.height &&
+                candidate.x + ox >= 0 &&
+                candidate.y + oy >= 0 &&
+                candidate.x + ox < data.width &&
+                candidate.y + oy < data.height)
             {
-                ++defined_count;
+                if (*ds_n_c && *ds_n_p)
+                {
+                    ++defined_count;
 
-                // 4 byte copy
-                *((int32_t*)def_n_p) = *((int32_t*)d_n_p);
-                *((int32_t*)def_n_c) = *((int32_t*)d_n_c);
+                    // 4 byte copy
+                    *((int32_t*)def_n_p) = *((int32_t*)d_n_p);
+                    *((int32_t*)def_n_c) = *((int32_t*)d_n_c);
 
-                def_n_p += 4;
-                def_n_c += 4;
-            } else if (!*ds_n_c) {
-                // also collect number of points defined only near destination pos
-                ++defined_only_near_pos;
+                    def_n_p += 4;
+                    def_n_c += 4;
+                } else if (!*ds_n_c) {
+                    // also collect number of points defined only near destination pos
+                    ++defined_only_near_pos;
+                }
             }
             d_n_p  += 4;
             d_n_c  += 4;
@@ -391,7 +402,7 @@ static int get_gradientness(const Coordinates& position,
     for (int ox=-comp_patch_radius; ox<=comp_patch_radius; ++ox)
         for (int oy=-comp_patch_radius; oy<=comp_patch_radius; ++oy) {
             Coordinates near_pos = position + Coordinates(ox, oy);
-            if (*confidence_map.at(near_pos)) {
+            if (clip(data, near_pos) && *confidence_map.at(near_pos)) {
                 ++defined_count;
                 for (int j = 0; j<input_bytes; ++j)
                     mean_values[j] += data.at(near_pos)[j];
@@ -405,7 +416,7 @@ static int get_gradientness(const Coordinates& position,
     for (int ox=-comp_patch_radius; ox<=comp_patch_radius; ++ox)
         for (int oy=-comp_patch_radius; oy<=comp_patch_radius; ++oy) {
             Coordinates near_pos = position + Coordinates(ox, oy);
-            if (*confidence_map.at(near_pos)) {
+            if (clip(data, near_pos) && *confidence_map.at(near_pos)) {
                 if (ox) {
                     ++defined_ox_count;
                     for (int j = 0; j<input_bytes; ++j)
@@ -429,11 +440,9 @@ static int get_gradientness(const Coordinates& position,
     for (int ox=-comp_patch_radius; ox<=comp_patch_radius; ++ox)
         for (int oy=-comp_patch_radius; oy<=comp_patch_radius; ++oy) {
             Coordinates near_pos = position + Coordinates(ox, oy);
-            if (*confidence_map.at(near_pos)) 
+            if (clip(data, near_pos) && *confidence_map.at(near_pos)) 
                 for (int j = 0; j<input_bytes; ++j) {
                     int d = (data.at(near_pos)[j] - mean_values[j] - (grad_x[j]*ox) - (grad_y[j]*oy));
-                    //fprintf(logfile, "\n%d, %d, %d", ox, oy, d);
-                    //fflush(logfile);
                     error_sum += diff_table_0[d];
                 }
         }
@@ -507,7 +516,7 @@ static void run(const gchar*,
     Parameters parameters;
     GimpDrawable *drawable, *corpus_drawable, *ref_drawable;
 
-    logfile = fopen("/tmp/resynth.log", "wt");
+    logfile = fopen(LOG_FILE, "wt");
 
     //////////////////////////////
     // Gimp setup dragons BEGIN
@@ -554,6 +563,14 @@ static void run(const gchar*,
 
     if (use_ref_layer) {
         ref_drawable = gimp_drawable_get(param[19].data.d_drawable);
+        if (ref_drawable->bpp != drawable->bpp) {
+            gimp_message(_("Working layer and reference layer must have the same color depth"));
+            gimp_drawable_detach(drawable);
+            gimp_drawable_detach(corpus_drawable);
+            gimp_drawable_detach(ref_drawable);
+            values[0].data.d_status = GIMP_PDB_EXECUTION_ERROR;
+            return;
+        }
     }
 
     gimp_progress_init(_("Resynthesize"));
@@ -692,10 +709,9 @@ static void run(const gchar*,
             clock_gettime(CLOCK_REALTIME, &perf_tmp);
             perf_neighbour_search -= perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
 
-            int n_neighbours = 0;
             const int sorted_offsets_size = sorted_offsets.size();
 
-            for(int j=0;j<sorted_offsets_size;j++) {
+            for(int j=0, n_neighbours=0; j<sorted_offsets_size; ++j) {
                 Coordinates candidate = position + sorted_offsets[j];
                 if (wrap_or_clip(parameters, data, candidate) && 
                         *confidence_map.at(candidate))
@@ -760,13 +776,13 @@ static void run(const gchar*,
             int mean_values[input_bytes];
             int grad_x[input_bytes];
             int grad_y[input_bytes];
-            if (parameters.invent_gradients &&
+            if (invent_gradients &&
                 get_gradientness(position, mean_values, grad_x, grad_y) < best)
             {
                 for (int ox=-transfer_patch_radius; ox<=transfer_patch_radius; ++ox)
                     for (int oy=-transfer_patch_radius; oy<=transfer_patch_radius; ++oy) {
                         Coordinates near_pos = position + Coordinates(ox, oy);
-                        if (!*confidence_map.at(near_pos)) {
+                        if (clip(data, near_pos) && !*confidence_map.at(near_pos)) {
                             for (int j = 0; j<input_bytes; ++j)
                                 data.at(near_pos)[j] = mean_values[j] + (grad_x[j]*ox) + (grad_y[j]*oy);
                             *confidence_map.at(near_pos) = 20;

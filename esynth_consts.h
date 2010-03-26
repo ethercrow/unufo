@@ -1,6 +1,8 @@
 #ifndef ESYNTH_CONSTS_H
 #define ESYNTH_CONSTS_H
 
+#define LOG_FILE "/tmp/resynth.log"
+
 const int max_neighbours         = 40000;
 
 const int max_threads = 4;
