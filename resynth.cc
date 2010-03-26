@@ -132,7 +132,7 @@ static int get_complexity(const Coordinates& point)
 
     int defined_count = defined_points.size();
     if (!defined_count)
-        return (comp_patch_radius*2 + 1)*(comp_patch_radius*2+1)*max_diff;
+        return -1;
 
     int mean_values[input_bytes];
     for (int j = 0; j<input_bytes; ++j)
@@ -195,6 +195,9 @@ void get_edge_points(vector<pair<int, Coordinates>>& edge_points)
         }
     }
     sort(edge_points.begin(), edge_points.end());
+    edge_points.erase(edge_points.begin(),
+        upper_bound(edge_points.begin(), edge_points.end(),
+            make_pair(-1, Coordinates(0, 0))));
 
     // TODO: partition the edge_points array according to complexity threshold
     // process high complexity points with patch searching
