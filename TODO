@@ -10,9 +10,6 @@ handle mirrored and rotated patches
 adaptive patch size
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-handle reinventing gradients, currently this sucks
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
 confidence-based blending
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -43,3 +40,12 @@ Usability improvements
 ----------------------
 
 * Selecting source region in addition to destination region (does gimp support multiple selections?)
+
+Performance improvements
+------------------------
+
+Multithreading
+~~~~~~~~~~~~~~
+
+Bounds checking only when necessary
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
