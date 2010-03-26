@@ -124,13 +124,15 @@ static int get_complexity(const Coordinates& point)
     for (int ox=-comp_patch_radius; ox<=comp_patch_radius; ++ox)
         for (int oy=-comp_patch_radius; oy<=comp_patch_radius; ++oy) {
             Coordinates point_off = point + Coordinates(ox, oy);
-            if (*confidence_map.at(point_off)) {
+            if (clip(data, point_off) && *confidence_map.at(point_off)) {
                 confidence_sum += *confidence_map.at(point_off);
                 defined_points.push_back(point_off);
             }
         }
 
     int defined_count = defined_points.size();
+    if (!defined_count)
+        return (comp_patch_radius*2 + 1)*(comp_patch_radius*2+1)*max_diff;
 
     int mean_values[input_bytes];
     for (int j = 0; j<input_bytes; ++j)
@@ -713,8 +715,7 @@ static void run(const gchar*,
 
             for(int j=0, n_neighbours=0; j<sorted_offsets_size; ++j) {
                 Coordinates candidate = position + sorted_offsets[j];
-                if (wrap_or_clip(parameters, data, candidate) && 
-                        *confidence_map.at(candidate))
+                if (clip(data, candidate) && *confidence_map.at(candidate))
                 {
                     START_TIMER
                     try_point(candidate, position, best, best_point, best_color_diff);
