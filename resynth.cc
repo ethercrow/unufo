@@ -509,6 +509,16 @@ static void run(const gchar*,
     GimpDrawable *drawable, *corpus_drawable, *ref_drawable;
 
     logfile = fopen(LOG_FILE, "wt");
+    int64_t perf_overall          = 0;
+    int64_t perf_neighbour_search = 0;
+    int64_t perf_refinement       = 0;
+    int64_t perf_interpolation    = 0;
+    int64_t perf_fill_undo        = 0;
+    int64_t perf_edge_points      = 0;
+    struct timespec perf_tmp;
+
+    clock_gettime(CLOCK_REALTIME, &perf_tmp);
+    perf_overall -= perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
 
     //////////////////////////////
     // Gimp setup dragons BEGIN
@@ -642,12 +652,6 @@ static void run(const gchar*,
     }
 
     /* Setup */
-    int64_t perf_neighbour_search = 0;
-    int64_t perf_refinement       = 0;
-    int64_t perf_interpolation    = 0;
-    int64_t perf_fill_undo        = 0;
-    int64_t perf_edge_points      = 0;
-    struct timespec perf_tmp;
 
     setup_metric(parameters.autism);
 
@@ -810,12 +814,17 @@ static void run(const gchar*,
         }
     }
 
+
+    clock_gettime(CLOCK_REALTIME, &perf_tmp);
+    perf_overall += perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
+
     fprintf(logfile, "\n%d points left unfilled\n", points_to_go);
     fprintf(logfile, "populating edge_points took %lld usec\n", perf_edge_points/1000);
     fprintf(logfile, "neighbour search took %lld usec\n", perf_neighbour_search/1000);
     fprintf(logfile, "refinement took %lld usec\n", perf_refinement/1000);
     fprintf(logfile, "interpolation took %lld usec\n", perf_interpolation/1000);
     fprintf(logfile, "updating undo stack took %lld usec\n", perf_fill_undo/1000);
+    fprintf(logfile, "overall time: %lld usec\n", perf_overall/1000);
     fclose(logfile);
 
     /* Write result back to the GIMP, clean up */
