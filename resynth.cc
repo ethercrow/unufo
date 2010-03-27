@@ -217,9 +217,10 @@ void transfer_patch(const Coordinates& position, const Coordinates& source)
 // collect pixels defined both near pos and near candidate
 inline int collect_defined_in_both_areas(const Coordinates& position, const Coordinates& candidate,
                 uint8_t* def_n_p, uint8_t* def_n_c,
-                int& defined_only_near_pos)
+                int& defined_only_near_pos, int& confidence_sum)
 {
     int defined_count = 0;
+    confidence_sum = 0;
     defined_only_near_pos = 0;
 
     // figure out if we need to check boundaries regurarly
@@ -250,6 +251,7 @@ inline int collect_defined_in_both_areas(const Coordinates& position, const Coor
             {
                 if (*ds_n_c && *ds_n_p)
                 {
+                    confidence_sum += *ds_n_c;
                     ++defined_count;
 
                     // 4 byte copy
@@ -281,7 +283,8 @@ static int get_difference_color_adjustment(const Coordinates& candidate,
                           vector<int>& best_color_diff)
 {
     int max_defined_size = 4*(2*comp_patch_radius + 1)*(2*comp_patch_radius + 1);
-    int defined_only_near_pos = 0;
+    int defined_only_near_pos;
+    int confidence_sum;
     int accum[4];
     //memset(accum, 0, 4*sizeof(int));
     *((int64_t*)accum) = 0LL;
@@ -291,7 +294,8 @@ static int get_difference_color_adjustment(const Coordinates& candidate,
     uint8_t  defined_near_cand[max_defined_size];
 
     int compared_count = collect_defined_in_both_areas(position, candidate,
-            defined_near_pos, defined_near_cand, defined_only_near_pos);
+            defined_near_pos, defined_near_cand,
+            defined_only_near_pos, confidence_sum);
 
     if (compared_count) {
         int sum = defined_only_near_pos*max_diff;
@@ -340,7 +344,7 @@ static int get_difference_color_adjustment(const Coordinates& candidate,
 
         if (sum < best)
            best_color_diff.assign(accum, accum+input_bytes);
-        return sum;
+        return sum*(266 - confidence_sum/compared_count);
     } else
         return best;
 }
@@ -349,13 +353,15 @@ static int get_difference(const Coordinates& candidate,
                           const Coordinates& position)
 {
     int max_defined_size = 4*(2*comp_patch_radius + 1)*(2*comp_patch_radius + 1);
-    int defined_only_near_pos = 0;
+    int defined_only_near_pos;
+    int confidence_sum;
 
     uint8_t defined_near_pos [max_defined_size];
     uint8_t defined_near_cand[max_defined_size];
 
     int compared_count = collect_defined_in_both_areas(position, candidate,
-            defined_near_pos, defined_near_cand, defined_only_near_pos);
+            defined_near_pos, defined_near_cand,
+            defined_only_near_pos, confidence_sum);
 
     if (compared_count) {
         int sum = defined_only_near_pos*max_diff;
@@ -372,7 +378,7 @@ static int get_difference(const Coordinates& candidate,
             def_n_c += 4;
         }
 
-        return sum;
+        return sum*(266 - confidence_sum/compared_count);
     } else
         return best;
 }
