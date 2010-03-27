@@ -46,6 +46,3 @@ Performance improvements
 
 Multithreading
 ~~~~~~~~~~~~~~
-
-Bounds checking only when necessary
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
