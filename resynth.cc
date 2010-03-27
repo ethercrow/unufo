@@ -75,39 +75,18 @@ static int sel_x1, sel_y1, sel_x2, sel_y2;
 // sorted_offsets is an array of points near origin, beginning with (0,0)
 // and sorted by distance from origin (see Coordinates::operator< for 
 // current definition of 'distance')
-static vector<Coordinates> data_points, sorted_offsets;
+static vector<Coordinates> data_points;
 static vector<Coordinates> ref_points(0);
 
 static int best;
 static Coordinates best_point;
 static vector<int> best_color_diff(0);
 
-static double neglog_cauchy(double x)
-{
-    return log(x*x+1.0);
-}
-
-static void make_offset_list(void)
-{
-    sorted_offsets.resize(0);
-    int half_side = sqrt(max_neighbours);
-    for(int y=-half_side-1; y<half_side+1; ++y)
-        for(int x=-half_side-1; x<half_side+1; ++x)
-            sorted_offsets.push_back(Coordinates(x,y));
-
-    sort(sorted_offsets.begin(), sorted_offsets.end());
-}
-
 static void setup_metric(float autism)
 {
     // TODO: improve patch difference metric
-    for(int i=-256;i<256;i++) {
-        //double value = neglog_cauchy(i/256.0/autism) /
-        //neglog_cauchy(1.0/autism) * 65536.0;
-        //diff_table[256+i] = int(value);
-        
+    for(int i=-256;i<256;i++)
         diff_table[256+i] = i*i;
-    }
     diff_table_0 = diff_table + 256;
     max_diff = diff_table[0];
 }
@@ -119,7 +98,6 @@ static int get_complexity(const Coordinates& point)
     int confidence_sum = 0;
 
     // calculate std dev
-    // TODO: optimize
     vector<Coordinates> defined_points(0);
     for (int ox=-comp_patch_radius; ox<=comp_patch_radius; ++ox)
         for (int oy=-comp_patch_radius; oy<=comp_patch_radius; ++oy) {
@@ -244,6 +222,13 @@ inline int collect_defined_in_both_areas(const Coordinates& position, const Coor
     int defined_count = 0;
     defined_only_near_pos = 0;
 
+    // figure out if we need to check boundaries regurarly
+    bool far_from_boundary = (position.x - comp_patch_radius >= 0 &&
+                              position.y - comp_patch_radius >= 0 &&
+                              position.x + comp_patch_radius <  data.width &&
+                              position.y + comp_patch_radius <  data.height
+    );
+
     uint8_t* d_n_p =        data.at(position  + Coordinates(-comp_patch_radius, -comp_patch_radius));
     uint8_t* d_n_c =        data.at(candidate + Coordinates(-comp_patch_radius, -comp_patch_radius));
     uint8_t* ds_n_p = confidence_map.at(position  + Coordinates(-comp_patch_radius, -comp_patch_radius));
@@ -252,14 +237,16 @@ inline int collect_defined_in_both_areas(const Coordinates& position, const Coor
     int d_shift  = 4*(data.width - (comp_patch_radius<<1) - 1);
     for (int oy=-comp_patch_radius; oy<=comp_patch_radius; ++oy) {
         for (int ox=-comp_patch_radius; ox<=comp_patch_radius; ++ox) {
-            if (position.x + ox >= 0 &&
-                position.y + oy >= 0 &&
-                position.x + ox < data.width &&
-                position.y + oy < data.height &&
-                candidate.x + ox >= 0 &&
-                candidate.y + oy >= 0 &&
-                candidate.x + ox < data.width &&
-                candidate.y + oy < data.height)
+            if (far_from_boundary || 
+                   (position.x + ox >= 0 &&
+                    position.y + oy >= 0 &&
+                    position.x + ox < data.width &&
+                    position.y + oy < data.height &&
+                    candidate.x + ox >= 0 &&
+                    candidate.y + oy >= 0 &&
+                    candidate.x + ox < data.width &&
+                    candidate.y + oy < data.height)
+               )
             {
                 if (*ds_n_c && *ds_n_p)
                 {
@@ -662,8 +649,6 @@ static void run(const gchar*,
     int64_t perf_edge_points      = 0;
     struct timespec perf_tmp;
 
-    make_offset_list();
-
     setup_metric(parameters.autism);
 
     /* Do it */
@@ -714,18 +699,19 @@ static void run(const gchar*,
             clock_gettime(CLOCK_REALTIME, &perf_tmp);
             perf_neighbour_search -= perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
 
-            const int sorted_offsets_size = sorted_offsets.size();
+            int neighbour_area_size = sqrt(parameters.neighbours)/2;
 
-            for(int j=0, n_neighbours=0; j<sorted_offsets_size; ++j) {
-                Coordinates candidate = position + sorted_offsets[j];
-                if (clip(data, candidate) && *confidence_map.at(candidate))
-                {
-                    START_TIMER
-                    try_point(candidate, position, best, best_point, best_color_diff);
-                    STOP_TIMER("try_point")
-                    if (++n_neighbours >= parameters.neighbours) break;
+            int n_neighbours = 0;
+            for (int oy = -neighbour_area_size; oy<=neighbour_area_size; ++oy)
+                for (int ox = -neighbour_area_size; ox<=neighbour_area_size; ++ox) {
+                    Coordinates candidate = position + Coordinates(ox, oy);
+                    if (clip(data, candidate) && *confidence_map.at(candidate)) {
+                        START_TIMER
+                        try_point(candidate, position, best, best_point, best_color_diff);
+                        STOP_TIMER("try_point")
+                        if (++n_neighbours >= parameters.neighbours) break;
+                    }
                 }
-            }
 
             clock_gettime(CLOCK_REALTIME, &perf_tmp);
             perf_neighbour_search += perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
