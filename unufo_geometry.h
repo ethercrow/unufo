@@ -1,9 +1,9 @@
 #ifndef ESYNTH_GEOMETRY_H
 #define ESYNTH_GEOMETRY_H
 
-#include "esynth_types.h"
+#include "unufo_types.h"
 
-inline bool clip(Bitmap<Pixelel> &image, const Coordinates& point)
+inline bool clip(Bitmap<uint8_t> &image, const Coordinates& point)
 {
     if (point.x < 0 ||
         point.y < 0 ||
@@ -13,8 +13,8 @@ inline bool clip(Bitmap<Pixelel> &image, const Coordinates& point)
     return true;
 }
 
-bool wrap_or_clip(Parameters &parameters, Bitmap<Pixelel> &image, Coordinates &point)
-{ 
+bool wrap_or_clip(Parameters &parameters, Bitmap<uint8_t> &image, Coordinates &point)
+{
     while(point.x < 0)
         if (parameters.h_tile)
             point.x += image.width;

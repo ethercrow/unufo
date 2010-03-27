@@ -40,10 +40,10 @@ using namespace std;
 #include <libgimp/gimp.h>
 #include <libgimp/gimpui.h>
 
-#include "esynth_types.h"
-#include "esynth_consts.h"
-#include "esynth_gimp_comm.h"
-#include "esynth_geometry.h"
+#include "unufo_types.h"
+#include "unufo_consts.h"
+#include "unufo_gimp_comm.h"
+#include "unufo_geometry.h"
 #include "bench.h"
 
 /* Helpers for the main function */
@@ -65,7 +65,7 @@ static bool use_ref_layer;
 // we must fill selection subset of data
 // using ref_mask subset of ref_layer for inspiration
 // status holds current state of point filling
-static Bitmap<Pixelel> data, data_mask, ref_layer, ref_mask;
+static Bitmap<uint8_t> data, data_mask, ref_layer, ref_mask;
 static Bitmap<uint8_t> confidence_map;
 static int sel_x1, sel_y1, sel_x2, sel_y2;
 
@@ -138,7 +138,7 @@ static int get_complexity(const Coordinates& point)
     for (int j = 0; j<input_bytes; ++j)
         mean_values[j] = 0;
     for (int i = 0; i<defined_count; ++i) {
-        Pixelel* colors = data.at(defined_points[i]);
+        uint8_t* colors = data.at(defined_points[i]);
         for (int j = 0; j<input_bytes; ++j)
             mean_values[j] = colors[j];
     }
@@ -147,7 +147,7 @@ static int get_complexity(const Coordinates& point)
     for (int j = 0; j<input_bytes; ++j)
         stddev[j] = 0;
     for (int i = 0; i<defined_count; ++i) {
-        Pixelel* colors = data.at(defined_points[i]);
+        uint8_t* colors = data.at(defined_points[i]);
         for (int j = 0; j<input_bytes; ++j) {
             int c = mean_values[j] - colors[j];
             stddev[j] += c*c;
@@ -238,14 +238,14 @@ void transfer_patch(const Coordinates& position, const Coordinates& source)
 // TODO: consider mirroring and rotation by passing orientation
 // collect pixels defined both near pos and near candidate
 inline int collect_defined_in_both_areas(const Coordinates& position, const Coordinates& candidate,
-                Pixelel* def_n_p, Pixelel* def_n_c,
+                uint8_t* def_n_p, uint8_t* def_n_c,
                 int& defined_only_near_pos)
 {
     int defined_count = 0;
     defined_only_near_pos = 0;
 
-    Pixelel* d_n_p =        data.at(position  + Coordinates(-comp_patch_radius, -comp_patch_radius));
-    Pixelel* d_n_c =        data.at(candidate + Coordinates(-comp_patch_radius, -comp_patch_radius));
+    uint8_t* d_n_p =        data.at(position  + Coordinates(-comp_patch_radius, -comp_patch_radius));
+    uint8_t* d_n_c =        data.at(candidate + Coordinates(-comp_patch_radius, -comp_patch_radius));
     uint8_t* ds_n_p = confidence_map.at(position  + Coordinates(-comp_patch_radius, -comp_patch_radius));
     uint8_t* ds_n_c = confidence_map.at(candidate + Coordinates(-comp_patch_radius, -comp_patch_radius));
 
@@ -300,8 +300,8 @@ static int get_difference_color_adjustment(const Coordinates& candidate,
     *((int64_t*)accum) = 0LL;
     *((int64_t*)accum+1) = 0LL;
 
-    Pixelel  defined_near_pos [max_defined_size];
-    Pixelel  defined_near_cand[max_defined_size];
+    uint8_t  defined_near_pos [max_defined_size];
+    uint8_t  defined_near_cand[max_defined_size];
 
     int compared_count = collect_defined_in_both_areas(position, candidate,
             defined_near_pos, defined_near_cand, defined_only_near_pos);
@@ -309,8 +309,8 @@ static int get_difference_color_adjustment(const Coordinates& candidate,
     if (compared_count) {
         int sum = defined_only_near_pos*max_diff;
 
-        Pixelel* def_n_p = defined_near_pos;
-        Pixelel* def_n_c = defined_near_cand;
+        uint8_t* def_n_p = defined_near_pos;
+        uint8_t* def_n_c = defined_near_cand;
 
         for (int i=0; i<compared_count; ++i) {
             for (int j=0; j<4; ++j)
@@ -364,8 +364,8 @@ static int get_difference(const Coordinates& candidate,
     int max_defined_size = 4*(2*comp_patch_radius + 1)*(2*comp_patch_radius + 1);
     int defined_only_near_pos = 0;
 
-    Pixelel  defined_near_pos [max_defined_size];
-    Pixelel  defined_near_cand[max_defined_size];
+    uint8_t defined_near_pos [max_defined_size];
+    uint8_t defined_near_cand[max_defined_size];
 
     int compared_count = collect_defined_in_both_areas(position, candidate,
             defined_near_pos, defined_near_cand, defined_only_near_pos);
@@ -373,8 +373,8 @@ static int get_difference(const Coordinates& candidate,
     if (compared_count) {
         int sum = defined_only_near_pos*max_diff;
 
-        Pixelel* def_n_p = defined_near_pos;
-        Pixelel* def_n_c = defined_near_cand;
+        uint8_t* def_n_p = defined_near_pos;
+        uint8_t* def_n_c = defined_near_cand;
         for (int i=0; i<compared_count; ++i) {
             for (int j=0; j<4; ++j) {
                 int d = int(def_n_c[j]) - int(def_n_p[j]);

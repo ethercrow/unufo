@@ -3,8 +3,7 @@
 
 #include <libgimp/gimp.h>
 #include <libgimp/gimpui.h>
-
-typedef guint8 Pixelel;
+#include <inttypes.h>
 
 typedef struct Coordinates {
     int x, y;

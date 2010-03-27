@@ -13,12 +13,12 @@
 #endif
 
 //Get a drawable and possibly its selection mask from the GIMP
-void fetch_image_and_mask(GimpDrawable *drawable, Bitmap<Pixelel> &image, int bytes, 
-        Bitmap<Pixelel> &mask, Pixelel default_mask_value,
+void fetch_image_and_mask(GimpDrawable *drawable, Bitmap<uint8_t> &image, int bytes, 
+        Bitmap<uint8_t> &mask, uint8_t default_mask_value,
         int& sel_x1, int& sel_y1, int& sel_x2, int& sel_y2)
 {
     int x,y, xoff, yoff;
-    Bitmap<Pixelel> temp_mask;
+    Bitmap<uint8_t> temp_mask;
     int sel_id;
     int has_selection;
     GimpDrawable *mask_drawable;
@@ -33,7 +33,7 @@ void fetch_image_and_mask(GimpDrawable *drawable, Bitmap<Pixelel> &image, int by
     gimp_drawable_offsets(drawable->drawable_id, &xoff, &yoff);
 
     if (!has_selection) {
-        memset(mask.data, default_mask_value, mask.width*mask.height*sizeof(Pixelel));
+        memset(mask.data, default_mask_value, mask.width*mask.height*sizeof(uint8_t));
         return;
     }
 
@@ -47,14 +47,14 @@ void fetch_image_and_mask(GimpDrawable *drawable, Bitmap<Pixelel> &image, int by
 
     gimp_drawable_detach(mask_drawable);
 
-    memset(mask.data, 0, mask.width*mask.height*sizeof(Pixelel));
+    memset(mask.data, 0, mask.width*mask.height*sizeof(uint8_t));
     for(y=0;y<temp_mask.height;y++)
         for(x=0;x<temp_mask.width;x++)
             mask.at(x+sel_x1,y+sel_y1)[0] = temp_mask.at(x,y)[0];
 }
 
-void fetch_image_and_mask(GimpDrawable *drawable, Bitmap<Pixelel> &image, int bytes, 
-        Bitmap<Pixelel> &mask, Pixelel default_mask_value)
+void fetch_image_and_mask(GimpDrawable *drawable, Bitmap<uint8_t> &image, int bytes, 
+        Bitmap<uint8_t> &mask, uint8_t default_mask_value)
 {
     int x1, y1, x2, y2;
     fetch_image_and_mask(drawable, image, bytes, mask, default_mask_value, x1, y1, x2, y2);
