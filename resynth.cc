@@ -476,11 +476,21 @@ public:
         int tl_best = 1<<30;
         Coordinates tl_best_point;
         vector<int> tl_best_color_diff(4, 0);
-
+        
+        // TODO: unify these branches, use ref_points with border
+        // bonus point: this will fix the FIXME dozen lines below
         if (use_ref_layer) {
-            for (int j=0; j<n_; ++j) {
-                const Coordinates& candidate = ref_points[rand()%ref_points.size()];
-                try_point(candidate, position_, tl_best, tl_best_point, tl_best_color_diff);
+            int ref_points_size = ref_points.size();
+            if (n_ < ref_points_size) { // random guesses
+                for (int j=0; j<n_; ++j) {
+                    const Coordinates& candidate = ref_points[rand()%ref_points_size];
+                    try_point(candidate, position_, tl_best, tl_best_point, tl_best_color_diff);
+                }
+            } else { // exhaustive search
+                for (int j=0; j<ref_points_size; ++j) {
+                    const Coordinates& candidate = ref_points[j];
+                    try_point(candidate, position_, tl_best, tl_best_point, tl_best_color_diff);
+                }
             }
         } else {
             for (int j=0; j<n_; ++j) {
@@ -493,7 +503,6 @@ public:
                 try_point(Coordinates(x, y), position_, tl_best, tl_best_point, tl_best_color_diff);
             }
         }
-
         return tl_best_point;
     }
 private:
