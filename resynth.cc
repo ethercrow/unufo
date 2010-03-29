@@ -97,7 +97,7 @@ static int get_complexity(const Coordinates& point)
     // TODO: improve complexity metric
     int confidence_sum = 0;
 
-    // calculate std dev
+    // get mean color
     vector<Coordinates> defined_points(0);
     for (int ox=-comp_patch_radius; ox<=comp_patch_radius; ++ox)
         for (int oy=-comp_patch_radius; oy<=comp_patch_radius; ++oy) {
@@ -121,26 +121,23 @@ static int get_complexity(const Coordinates& point)
             mean_values[j] = colors[j];
     }
 
-    int stddev[input_bytes];
-    for (int j = 0; j<input_bytes; ++j)
-        stddev[j] = 0;
-    for (int i = 0; i<defined_count; ++i) {
-        uint8_t* colors = data.at(defined_points[i]);
-        for (int j = 0; j<input_bytes; ++j) {
-            int c = mean_values[j] - colors[j];
-            stddev[j] += c*c;
+    // compute local deviation
+    // spatial weight function is 1/(1+sqared_distance_from_point)
+    int weighted_dev;
+    for (int ox=-comp_patch_radius; ox<=comp_patch_radius; ++ox)
+        for (int oy=-comp_patch_radius; oy<=comp_patch_radius; ++oy) {
+            Coordinates point_off = point + Coordinates(ox, oy);
+            if (clip(data, point_off) && *confidence_map.at(point_off))
+                for (int j = 0; j<input_bytes; ++j) {
+                    int d = (data.at(point_off)[j] - mean_values[j]);
+                    weighted_dev += d*d/(1+ox*ox+oy*oy);
+                }
         }
-    }
-
-    int result = 0;
-    for (int j = 0; j<input_bytes; ++j)
-        result += stddev[j];
-    result /= defined_count;
 
     // multiply by average confidence among defined points
-    result *= (confidence_sum/defined_count);
+    weighted_dev *= (confidence_sum/defined_count);
 
-    return result;
+    return weighted_dev;
 }
 
 int purge_already_filled()
