@@ -1,0 +1,388 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta name="generator" content="Docutils 0.6: http://docutils.sourceforge.net/" />
+<title></title>
+<style type="text/css">
+
+/*
+:Author: David Goodger (goodger@python.org)
+:Id: $Id: html4css1.css 5951 2009-05-18 18:03:10Z milde $
+:Copyright: This stylesheet has been placed in the public domain.
+
+Default cascading style sheet for the HTML output of Docutils.
+
+See http://docutils.sf.net/docs/howto/html-stylesheets.html for how to
+customize this style sheet.
+*/
+
+/* used to remove borders from tables and images */
+.borderless, table.borderless td, table.borderless th {
+  border: 0 }
+
+table.borderless td, table.borderless th {
+  /* Override padding for "table.docutils td" with "! important".
+     The right padding separates the table cells. */
+  padding: 0 0.5em 0 0 ! important }
+
+.first {
+  /* Override more specific margin styles with "! important". */
+  margin-top: 0 ! important }
+
+.last, .with-subtitle {
+  margin-bottom: 0 ! important }
+
+.hidden {
+  display: none }
+
+a.toc-backref {
+  text-decoration: none ;
+  color: black }
+
+blockquote.epigraph {
+  margin: 2em 5em ; }
+
+dl.docutils dd {
+  margin-bottom: 0.5em }
+
+/* Uncomment (and remove this text!) to get bold-faced definition list terms
+dl.docutils dt {
+  font-weight: bold }
+*/
+
+div.abstract {
+  margin: 2em 5em }
+
+div.abstract p.topic-title {
+  font-weight: bold ;
+  text-align: center }
+
+div.admonition, div.attention, div.caution, div.danger, div.error,
+div.hint, div.important, div.note, div.tip, div.warning {
+  margin: 2em ;
+  border: medium outset ;
+  padding: 1em }
+
+div.admonition p.admonition-title, div.hint p.admonition-title,
+div.important p.admonition-title, div.note p.admonition-title,
+div.tip p.admonition-title {
+  font-weight: bold ;
+  font-family: sans-serif }
+
+div.attention p.admonition-title, div.caution p.admonition-title,
+div.danger p.admonition-title, div.error p.admonition-title,
+div.warning p.admonition-title {
+  color: red ;
+  font-weight: bold ;
+  font-family: sans-serif }
+
+/* Uncomment (and remove this text!) to get reduced vertical space in
+   compound paragraphs.
+div.compound .compound-first, div.compound .compound-middle {
+  margin-bottom: 0.5em }
+
+div.compound .compound-last, div.compound .compound-middle {
+  margin-top: 0.5em }
+*/
+
+div.dedication {
+  margin: 2em 5em ;
+  text-align: center ;
+  font-style: italic }
+
+div.dedication p.topic-title {
+  font-weight: bold ;
+  font-style: normal }
+
+div.figure {
+  margin-left: 2em ;
+  margin-right: 2em }
+
+div.footer, div.header {
+  clear: both;
+  font-size: smaller }
+
+div.line-block {
+  display: block ;
+  margin-top: 1em ;
+  margin-bottom: 1em }
+
+div.line-block div.line-block {
+  margin-top: 0 ;
+  margin-bottom: 0 ;
+  margin-left: 1.5em }
+
+div.sidebar {
+  margin: 0 0 0.5em 1em ;
+  border: medium outset ;
+  padding: 1em ;
+  background-color: #ffffee ;
+  width: 40% ;
+  float: right ;
+  clear: right }
+
+div.sidebar p.rubric {
+  font-family: sans-serif ;
+  font-size: medium }
+
+div.system-messages {
+  margin: 5em }
+
+div.system-messages h1 {
+  color: red }
+
+div.system-message {
+  border: medium outset ;
+  padding: 1em }
+
+div.system-message p.system-message-title {
+  color: red ;
+  font-weight: bold }
+
+div.topic {
+  margin: 2em }
+
+h1.section-subtitle, h2.section-subtitle, h3.section-subtitle,
+h4.section-subtitle, h5.section-subtitle, h6.section-subtitle {
+  margin-top: 0.4em }
+
+h1.title {
+  text-align: center }
+
+h2.subtitle {
+  text-align: center }
+
+hr.docutils {
+  width: 75% }
+
+img.align-left, .figure.align-left{
+  clear: left ;
+  float: left ;
+  margin-right: 1em }
+
+img.align-right, .figure.align-right {
+  clear: right ;
+  float: right ;
+  margin-left: 1em }
+
+.align-left {
+  text-align: left }
+
+.align-center {
+  clear: both ;
+  text-align: center }
+
+.align-right {
+  text-align: right }
+
+/* reset inner alignment in figures */
+div.align-right {
+  text-align: left }
+
+/* div.align-center * { */
+/*   text-align: left } */
+
+ol.simple, ul.simple {
+  margin-bottom: 1em }
+
+ol.arabic {
+  list-style: decimal }
+
+ol.loweralpha {
+  list-style: lower-alpha }
+
+ol.upperalpha {
+  list-style: upper-alpha }
+
+ol.lowerroman {
+  list-style: lower-roman }
+
+ol.upperroman {
+  list-style: upper-roman }
+
+p.attribution {
+  text-align: right ;
+  margin-left: 50% }
+
+p.caption {
+  font-style: italic }
+
+p.credits {
+  font-style: italic ;
+  font-size: smaller }
+
+p.label {
+  white-space: nowrap }
+
+p.rubric {
+  font-weight: bold ;
+  font-size: larger ;
+  color: maroon ;
+  text-align: center }
+
+p.sidebar-title {
+  font-family: sans-serif ;
+  font-weight: bold ;
+  font-size: larger }
+
+p.sidebar-subtitle {
+  font-family: sans-serif ;
+  font-weight: bold }
+
+p.topic-title {
+  font-weight: bold }
+
+pre.address {
+  margin-bottom: 0 ;
+  margin-top: 0 ;
+  font: inherit }
+
+pre.literal-block, pre.doctest-block {
+  margin-left: 2em ;
+  margin-right: 2em }
+
+span.classifier {
+  font-family: sans-serif ;
+  font-style: oblique }
+
+span.classifier-delimiter {
+  font-family: sans-serif ;
+  font-weight: bold }
+
+span.interpreted {
+  font-family: sans-serif }
+
+span.option {
+  white-space: nowrap }
+
+span.pre {
+  white-space: pre }
+
+span.problematic {
+  color: red }
+
+span.section-subtitle {
+  /* font-size relative to parent (h1..h6 element) */
+  font-size: 80% }
+
+table.citation {
+  border-left: solid 1px gray;
+  margin-left: 1px }
+
+table.docinfo {
+  margin: 2em 4em }
+
+table.docutils {
+  margin-top: 0.5em ;
+  margin-bottom: 0.5em }
+
+table.footnote {
+  border-left: solid 1px black;
+  margin-left: 1px }
+
+table.docutils td, table.docutils th,
+table.docinfo td, table.docinfo th {
+  padding-left: 0.5em ;
+  padding-right: 0.5em ;
+  vertical-align: top }
+
+table.docutils th.field-name, table.docinfo th.docinfo-name {
+  font-weight: bold ;
+  text-align: left ;
+  white-space: nowrap ;
+  padding-left: 0 }
+
+h1 tt.docutils, h2 tt.docutils, h3 tt.docutils,
+h4 tt.docutils, h5 tt.docutils, h6 tt.docutils {
+  font-size: 100% }
+
+ul.auto-toc {
+  list-style-type: none }
+
+</style>
+</head>
+<body>
+<div class="document">
+
+
+<div class="section" id="unufo">
+<h1>Unufo</h1>
+<blockquote>
+<p>Unufo is the gimp plugin for removing UFOs from photos. People who don't know that also use it for retouching photos, torturing manga and just for lulz.</p>
+<p>Unufo is originally based on Resynthesizer plugin, available at <a class="reference external" href="http://www.logarithmic.net/pfh/resynthesizer">http://www.logarithmic.net/pfh/resynthesizer</a></p>
+</blockquote>
+</div>
+<div class="section" id="installation">
+<h1>Installation</h1>
+<blockquote>
+make
+make install # yes, without sudo. This installs plugin and loader into your $HOME/.gimp-2.6 directory</blockquote>
+<div class="section" id="development-packages-needed-for-compilation">
+<h2>Development packages needed for compilation</h2>
+<blockquote>
+<ul class="simple">
+<li>libgimp</li>
+<li>gtk</li>
+</ul>
+</blockquote>
+</div>
+</div>
+<div class="section" id="usage">
+<h1>Usage</h1>
+<p>This plug-in is used via the script-fu loader available at Filters/Enhance as 'Heal selection'.</p>
+<p>Options:</p>
+<blockquote>
+<ul>
+<li><p class="first">Radius to take texture from</p>
+<blockquote>
+<p>This option is only meaningful when reference layer is <strong>not</strong> used</p>
+<p>Source region is the bounding box of the destination region plus the border of width equal to this option's value. OK, you can drop re-reading the previous sentence and just look at the picture: TODO: actually add the picture</p>
+<p>Quality/Performance impact: obviously, you should set this so that source region is relevant to the desired content in destination region. Performance impact is negligible.</p>
+</blockquote>
+</li>
+<li><p class="first">How many neighbour patches to consider as a source</p>
+<blockquote>
+<p>How many neighbour patches should be considered as a source, in addition to the global search in the source region</p>
+<p>Q/P impact: Neighbour search, along with global search, is the most time-consuming part of the plugin. Time scales nearly linearly with this parameter. The best value varies from picture to picture and should be pretty obvious to You, the proud human.</p>
+</blockquote>
+</li>
+<li><p class="first">How many randomly chosen patches to consider as a source</p>
+<blockquote>
+<p>The same as the previous option, but for the global search in source region. The best value for this parameter, however, is much less obvious and depends on the source region texture, quality requirements and the phase of the moon.</p>
+<p>Generally, increasing this parameter's value causes linear computation time increase and (tux-knows-what-kind-of-function) quality increase.</p>
+</blockquote>
+</li>
+<li><p class="first">Patch size (larger = slower)&quot; '(3 1 50 1.0 2.0 0 1)</p>
+<blockquote>
+<p>This parameter controls the size of patches used in all comparisons while searching. Again, the enlightening picture:
+TODO: hey, I said add pictures!</p>
+<p>Q/P impact: the most computation-intensive part of algorithm depends quadratically on this parameter. The best value for this parameter is about the size of distinguishable feature of the source region. Or, I guess, larger if the source region texture is highly regular.</p>
+</blockquote>
+</li>
+<li><p class="first">Transfer unit size (smaller = slower, but possibly less artifacts)&quot; '(2 0 30 1.0 2.0 0 1)</p>
+<blockquote>
+<p>Q/P impact: computation time depends about inverse-quadratically on this parameter. You should set this as high as possible while not introducing blocking artifacts</p>
+</blockquote>
+</li>
+<li><p class="first">Invent gradients</p>
+<blockquote>
+<p>This allows algorithm to fill the area of tranfer unit size with gradient, if that is better (i.e. minimizes the patch difference) than all reviewed patches (neighbour and from the source region)</p>
+<p>Q/P impact: Performance impact is negligible. If you don't mind plain and boring gradients in your destination region, you should enable this parameter</p>
+</blockquote>
+</li>
+<li><p class="first">Max color adjustment applied to transferred patch</p>
+</li>
+<li><p class="first">Apply the same amount of adjustment to all channels</p>
+</li>
+<li><p class="first">Use manually defined reference area</p>
+</li>
+<li><p class="first">Reference map layer</p>
+</li>
+</ul>
+</blockquote>
+</div>
+</div>
+</body>
+</html>
