@@ -33,6 +33,7 @@ maintainabilty improvements
 QA improvements
 ----------------------------
 
+* deterministic output - fixed random seed
 * moar tests
 * CTest maybe?
 
