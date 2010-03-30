@@ -29,6 +29,7 @@
 #include <gtk/gtk.h>
 
 #include <vector>
+#include <map>
 #include <utility>
 #include <algorithm>
 
@@ -81,6 +82,8 @@ static vector<Coordinates> ref_points(0);
 static int best;
 static Coordinates best_point;
 static vector<int> best_color_diff(0);
+
+static map<Coordinates, Coordinates> previous_decisions;
 
 static void setup_metric(float autism)
 {
@@ -208,6 +211,7 @@ void transfer_patch(const Coordinates& position, const Coordinates& source)
                     *confidence_map.at(near_src) - 5); 
             }
         }
+    previous_decisions[position] = source;
 }
 
 // TODO: consider mirroring and rotation by passing orientation
@@ -524,6 +528,10 @@ static void run(const gchar*,
     int64_t perf_overall          = 0;
     int64_t perf_neighbour_search = 0;
     int64_t perf_refinement       = 0;
+
+    int64_t perf_sol_propagation  = 0;
+    int successful_sol_prop_cnt = 0;
+
     int64_t perf_interpolation    = 0;
     int64_t perf_fill_undo        = 0;
     int64_t perf_edge_points      = 0;
@@ -773,6 +781,46 @@ static void run(const gchar*,
             ///////////////////////////
 
             ///////////////////////////
+            // Solution propagation BEGIN
+            ///////////////////////////
+            
+            clock_gettime(CLOCK_REALTIME, &perf_tmp);
+            perf_sol_propagation -= perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
+
+            if (!previous_decisions.empty()) {
+                int former_best = best;
+                // find the closest neighbour in destination region
+                auto iter     = previous_decisions.begin();
+                auto iter_end = previous_decisions.end();
+                Coordinates closest = (*iter++).first;
+                Coordinates smallest_diff = closest - position;
+                for(; iter != iter_end; ++iter) {
+                    Coordinates diff = iter->first - position;
+                    if (diff < smallest_diff) {
+                        closest = iter->first;
+                        smallest_diff = diff;
+                    }
+                }
+                // if you don't understand what happens here, you should really see the picture
+                // about solution propagation, it totally helps
+                for (int oy = -transfer_patch_radius; oy<=transfer_patch_radius; ++oy)
+                    for (int ox = -transfer_patch_radius; ox<=transfer_patch_radius; ++ox) {
+                        Coordinates candidate = previous_decisions[closest] - smallest_diff + Coordinates(ox, oy);
+                        if (clip(data, candidate) && *confidence_map.at(candidate))
+                            try_point(candidate, position, best, best_point, best_color_diff);
+                    }
+                if (former_best != best)
+                    ++successful_sol_prop_cnt;
+            }
+
+            clock_gettime(CLOCK_REALTIME, &perf_tmp);
+            perf_sol_propagation += perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
+            
+            ///////////////////////////
+            // Solution propagation END
+            ///////////////////////////
+            
+            ///////////////////////////
             // Try interpolation and transfer BEGIN
             ///////////////////////////
 
@@ -834,6 +882,8 @@ static void run(const gchar*,
     fprintf(logfile, "populating edge_points took %lld usec\n", perf_edge_points/1000);
     fprintf(logfile, "neighbour search took %lld usec\n", perf_neighbour_search/1000);
     fprintf(logfile, "refinement took %lld usec\n", perf_refinement/1000);
+    fprintf(logfile, "solution propagation took %lld usec and was useful in %d cases\n",
+            perf_sol_propagation/1000, successful_sol_prop_cnt);
     fprintf(logfile, "interpolation took %lld usec\n", perf_interpolation/1000);
     fprintf(logfile, "updating undo stack took %lld usec\n", perf_fill_undo/1000);
     fprintf(logfile, "overall time: %lld usec\n", perf_overall/1000);
