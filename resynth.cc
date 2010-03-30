@@ -806,7 +806,9 @@ static void run(const gchar*,
                 for (int oy = -transfer_patch_radius; oy<=transfer_patch_radius; ++oy)
                     for (int ox = -transfer_patch_radius; ox<=transfer_patch_radius; ++ox) {
                         Coordinates candidate = previous_decisions[closest] - smallest_diff + Coordinates(ox, oy);
-                        if (clip(data, candidate) && *confidence_map.at(candidate))
+                        if (clip(data, candidate) &&
+                            *confidence_map.at(candidate) &&
+                            data_mask.at(candidate))
                             try_point(candidate, position, best, best_point, best_color_diff);
                     }
                 if (former_best != best)
