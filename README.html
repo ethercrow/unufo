@@ -354,14 +354,14 @@ make install # yes, without sudo. This installs plugin and loader into your $HOM
 <p>Generally, increasing this parameter's value causes linear computation time increase and (tux-knows-what-kind-of-function) quality increase.</p>
 </blockquote>
 </li>
-<li><p class="first">Patch size (larger = slower)&quot; '(3 1 50 1.0 2.0 0 1)</p>
+<li><p class="first">Patch size (larger = slower)</p>
 <blockquote>
 <p>This parameter controls the size of patches used in all comparisons while searching. Again, the enlightening picture:
 TODO: hey, I said add pictures!</p>
 <p>Q/P impact: the most computation-intensive part of algorithm depends quadratically on this parameter. The best value for this parameter is about the size of distinguishable feature of the source region. Or, I guess, larger if the source region texture is highly regular.</p>
 </blockquote>
 </li>
-<li><p class="first">Transfer unit size (smaller = slower, but possibly less artifacts)&quot; '(2 0 30 1.0 2.0 0 1)</p>
+<li><p class="first">Transfer unit size (smaller = slower, but possibly less artifacts)</p>
 <blockquote>
 <p>Q/P impact: computation time depends about inverse-quadratically on this parameter. You should set this as high as possible while not introducing blocking artifacts</p>
 </blockquote>

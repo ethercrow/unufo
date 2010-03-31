@@ -46,14 +46,14 @@ Options:
 
        Generally, increasing this parameter's value causes linear computation time increase and (tux-knows-what-kind-of-function) quality increase.
 
-    * Patch size (larger = slower)" '(3 1 50 1.0 2.0 0 1)
+    * Patch size (larger = slower)
 
         This parameter controls the size of patches used in all comparisons while searching. Again, the enlightening picture:
         TODO: hey, I said add pictures!
 
         Q/P impact: the most computation-intensive part of algorithm depends quadratically on this parameter. The best value for this parameter is about the size of distinguishable feature of the source region. Or, I guess, larger if the source region texture is highly regular.
 
-    * Transfer unit size (smaller = slower, but possibly less artifacts)" '(2 0 30 1.0 2.0 0 1)
+    * Transfer unit size (smaller = slower, but possibly less artifacts)
 
         Q/P impact: computation time depends about inverse-quadratically on this parameter. You should set this as high as possible while not introducing blocking artifacts
 
