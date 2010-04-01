@@ -83,7 +83,8 @@ static int best;
 static Coordinates best_point;
 static vector<int> best_color_diff(0);
 
-static map<Coordinates, Coordinates> previous_decisions;
+static map<Coordinates, Coordinates> transfer_map;
+static map<Coordinates, int> transfer_belief;
 
 static void setup_metric(float autism)
 {
@@ -177,17 +178,25 @@ void get_edge_points(vector<pair<int, Coordinates>>& edge_points)
         upper_bound(edge_points.begin(), edge_points.end(),
             make_pair(-1, Coordinates(0, 0))));
 
-    // TODO: partition the edge_points array according to complexity threshold
-    // process high complexity points with patch searching
-    // process low complexity points with extrapolation
-    // or interpolation.. depends on where you're looking from
-
     // leave only the most important edge_points
     if (edge_points.size() > important_count)
         edge_points.erase(edge_points.begin(),
             edge_points.end()-edge_points.size()/2);
 }
 
+void transfer_patch(const Coordinates& position, const Coordinates& source, int belief)
+{
+    for(int j=0;j<input_bytes;j++) {
+        int new_color = data.at(source)[j] + best_color_diff[j];
+        data.at(position)[j] = new_color;
+    }
+    // TODO: better confidence transfer
+    *confidence_map.at(position) = max(10, *confidence_map.at(source) - 5); 
+    transfer_map[position] = source;
+    transfer_belief[position] = belief;
+}
+
+/*
 void transfer_patch(const Coordinates& position, const Coordinates& source)
 {
     for (int ox=-transfer_patch_radius; ox<=transfer_patch_radius; ++ox)
@@ -211,8 +220,9 @@ void transfer_patch(const Coordinates& position, const Coordinates& source)
                     *confidence_map.at(near_src) - 5); 
             }
         }
-    previous_decisions[position] = source;
+    transfer_map[position] = source;
 }
+*/
 
 // TODO: consider mirroring and rotation by passing orientation
 // collect pixels defined both near pos and near candidate
@@ -449,7 +459,7 @@ static int get_gradientness(const Coordinates& position,
     return error_sum;
 }
 
-static inline void try_point(const Coordinates& candidate,
+static inline bool try_point(const Coordinates& candidate,
                              const Coordinates& position,
                              int& best,
                              Coordinates& best_point,
@@ -462,9 +472,10 @@ static inline void try_point(const Coordinates& candidate,
         difference = get_difference(candidate, position);
 
     if (best <= difference)
-        return;
+        return false;
     best = difference;
     best_point = candidate;
+    return true;
 }
 
 class refine_callable
@@ -527,6 +538,7 @@ static void run(const gchar*,
     logfile = fopen(LOG_FILE, "wt");
     int64_t perf_overall          = 0;
     int64_t perf_neighbour_search = 0;
+    int64_t perf_random_search    = 0;
     int64_t perf_refinement       = 0;
 
     int64_t perf_sol_propagation  = 0;
@@ -749,7 +761,7 @@ static void run(const gchar*,
             ///////////////////////////
 
             clock_gettime(CLOCK_REALTIME, &perf_tmp);
-            perf_refinement -= perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
+            perf_random_search -= perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
 
             /*
             vector<boost::shared_future<Coordinates>> futures(0);
@@ -774,87 +786,68 @@ static void run(const gchar*,
             try_point(cand, position, best, best_point, best_color_diff);
 
             clock_gettime(CLOCK_REALTIME, &perf_tmp);
-            perf_refinement += perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
+            perf_random_search += perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
 
             ///////////////////////////
             // Random refinement END 
             ///////////////////////////
 
-            ///////////////////////////
-            // Solution propagation BEGIN
-            ///////////////////////////
-            
-            clock_gettime(CLOCK_REALTIME, &perf_tmp);
-            perf_sol_propagation -= perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
+            transfer_patch(position, best_point, best);
+        }
 
-            if (!previous_decisions.empty()) {
-                int former_best = best;
-                // find the closest neighbour in destination region
-                auto iter     = previous_decisions.begin();
-                auto iter_end = previous_decisions.end();
-                Coordinates closest = (*iter++).first;
-                Coordinates smallest_diff = closest - position;
-                for(; iter != iter_end; ++iter) {
-                    Coordinates diff = iter->first - position;
-                    if (diff < smallest_diff) {
-                        closest = iter->first;
-                        smallest_diff = diff;
-                    }
-                }
-                // if you don't understand what happens here, you should really see the picture
-                // about solution propagation, it totally helps
-                for (int oy = -transfer_patch_radius; oy<=transfer_patch_radius; ++oy)
-                    for (int ox = -transfer_patch_radius; ox<=transfer_patch_radius; ++ox) {
-                        Coordinates candidate = previous_decisions[closest] - smallest_diff + Coordinates(ox, oy);
-                        if (clip(data, candidate) &&
-                            *confidence_map.at(candidate) &&
-                            data_mask.at(candidate))
-                            try_point(candidate, position, best, best_point, best_color_diff);
-                    }
-                if (former_best != best)
-                    ++successful_sol_prop_cnt;
-            }
+        clock_gettime(CLOCK_REALTIME, &perf_tmp);
+        perf_refinement -= perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
 
-            clock_gettime(CLOCK_REALTIME, &perf_tmp);
-            perf_sol_propagation += perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
-            
-            ///////////////////////////
-            // Solution propagation END
-            ///////////////////////////
-            
-            ///////////////////////////
-            // Try interpolation and transfer BEGIN
-            ///////////////////////////
-
-            clock_gettime(CLOCK_REALTIME, &perf_tmp);
-            perf_interpolation -= perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
-
-            int mean_values[input_bytes];
-            int grad_x[input_bytes];
-            int grad_y[input_bytes];
-            if (invent_gradients &&
-                get_gradientness(position, mean_values, grad_x, grad_y) < best)
-            {
-                for (int ox=-transfer_patch_radius; ox<=transfer_patch_radius; ++ox)
-                    for (int oy=-transfer_patch_radius; oy<=transfer_patch_radius; ++oy) {
-                        Coordinates near_pos = position + Coordinates(ox, oy);
-                        if (clip(data, near_pos) && !*confidence_map.at(near_pos)) {
-                            for (int j = 0; j<input_bytes; ++j)
-                                data.at(near_pos)[j] = mean_values[j] + (grad_x[j]*ox) + (grad_y[j]*oy);
-                            *confidence_map.at(near_pos) = 20;
+        for (int p=0; p<8; ++p) {
+            int p_mod2 = p%2;
+            int i_begin = edge_points_size*(p_mod2);
+            int i_end   = edge_points_size*(1-p_mod2);
+            int i_inc   = 1 - 2*p_mod2;
+            bool converged = true;
+            for(int i=0; i < edge_points_size; ++i) {
+                Coordinates position = edge_points[i].second;
+                // coherence propagation
+                for (int ox=-1; ox<=1; ++ox)
+                    for (int oy=-1; oy<=1; ++oy) {
+                        Coordinates offset(ox, oy);
+                        Coordinates neighbour = position + offset;
+                        if (*data_mask.at(neighbour)) {
+                            auto neighbour_src = transfer_map.find(neighbour);
+                            if (neighbour_src != transfer_map.end()) {
+                                int best = transfer_belief[position];
+                                Coordinates best_point = transfer_map[position];
+                                if (try_point(neighbour_src->second - offset,
+                                    position, best, best_point, best_color_diff))
+                                {
+                                    transfer_patch(position, best_point, best);
+                                    converged = false;
+                                }
+                            }
                         }
                     }
-            } else
-                transfer_patch(position, best_point);
 
-            ///////////////////////////
-            // Try interpolation and transfer END
-            ///////////////////////////
-            
-            clock_gettime(CLOCK_REALTIME, &perf_tmp);
-            perf_interpolation += perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
-
+                // coherence propagation
+                for (int ox=-1; ox<=1; ++ox)
+                    for (int oy=-1; oy<=1; ++oy) {
+                        Coordinates offset(ox, oy);
+                        Coordinates near_src = transfer_map[position] + offset;
+                        if (!*data_mask.at(near_src)) {
+                            int best = transfer_belief[position];
+                            Coordinates best_point = transfer_map[position];
+                            if (try_point(near_src - offset,
+                                position, best, best_point, best_color_diff))
+                            {
+                                transfer_patch(position, best_point, best);
+                                converged = false;
+                            }
+                        }
+                    }
+            }
+            if (converged) break;
         }
+
+        clock_gettime(CLOCK_REALTIME, &perf_tmp);
+        perf_refinement += perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
 
         if (!edge_points_size)
             break;
@@ -883,6 +876,7 @@ static void run(const gchar*,
     fprintf(logfile, "\n%d points left unfilled\n", points_to_go);
     fprintf(logfile, "populating edge_points took %lld usec\n", perf_edge_points/1000);
     fprintf(logfile, "neighbour search took %lld usec\n", perf_neighbour_search/1000);
+    fprintf(logfile, "random search took %lld usec\n", perf_random_search/1000);
     fprintf(logfile, "refinement took %lld usec\n", perf_refinement/1000);
     fprintf(logfile, "solution propagation took %lld usec and was useful in %d cases\n",
             perf_sol_propagation/1000, successful_sol_prop_cnt);
