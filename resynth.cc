@@ -699,7 +699,7 @@ static void run(const gchar*,
 
     int points_to_go = total_points;
     while (points_to_go > 0) {
-        gimp_progress_update(0.5-float(points_to_go)/(2*total_points));
+        gimp_progress_update(1.0-float(points_to_go)/(total_points));
         points_to_go -= purge_already_filled(data_points);
 
         clock_gettime(CLOCK_REALTIME, &perf_tmp);
