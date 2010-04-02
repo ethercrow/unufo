@@ -76,7 +76,6 @@ static int sel_x1, sel_y1, sel_x2, sel_y2;
 // sorted_offsets is an array of points near origin, beginning with (0,0)
 // and sorted by distance from origin (see Coordinates::operator< for 
 // current definition of 'distance')
-static vector<Coordinates> data_points;
 static vector<Coordinates> ref_points(0);
 
 static int best;
@@ -144,7 +143,7 @@ static int get_complexity(const Coordinates& point)
     return weighted_dev;
 }
 
-int purge_already_filled()
+int purge_already_filled(vector<Coordinates>& data_points)
 {
     int result = 0;
     for(size_t i=0; i < data_points.size(); ++i) {
@@ -159,7 +158,7 @@ int purge_already_filled()
     return result;
 }
 
-void get_edge_points(vector<pair<int, Coordinates>>& edge_points)
+void get_edge_points(const vector<Coordinates>& data_points, vector<pair<int, Coordinates>>& edge_points)
 {
     for(size_t i=0; i < data_points.size(); ++i) {
         Coordinates position = data_points[i];
@@ -181,7 +180,7 @@ void get_edge_points(vector<pair<int, Coordinates>>& edge_points)
     // leave only the most important edge_points
     if (edge_points.size() > important_count)
         edge_points.erase(edge_points.begin(),
-            edge_points.end()-edge_points.size()/2);
+            edge_points.end()-edge_points.size()/4);
 }
 
 void transfer_patch(const Coordinates& position, const Coordinates& source, int belief)
@@ -624,7 +623,7 @@ static void run(const gchar*,
 
     confidence_map.size(data.width,data.height,1);
 
-    data_points.resize(0);
+    vector<Coordinates> data_points(0);
 
     for(int y=0;y<confidence_map.height;y++)
         for(int x=0;x<confidence_map.width;x++) {
@@ -690,6 +689,7 @@ static void run(const gchar*,
     /* Do it */
 
     int total_points = data_points.size();
+    vector<Coordinates> data_points_backup(data_points);
 
     fprintf(logfile, "status  dimensions: (%d, %d)\n", confidence_map.width, confidence_map.height);
     fprintf(logfile, "data dimensions: (%d, %d)\n", data.width, data.height);
@@ -699,8 +699,8 @@ static void run(const gchar*,
 
     int points_to_go = total_points;
     while (points_to_go > 0) {
-        gimp_progress_update(1.0-float(points_to_go)/total_points);
-        points_to_go -= purge_already_filled();
+        gimp_progress_update(0.5-float(points_to_go)/(2*total_points));
+        points_to_go -= purge_already_filled(data_points);
 
         clock_gettime(CLOCK_REALTIME, &perf_tmp);
         perf_edge_points -= perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
@@ -711,7 +711,7 @@ static void run(const gchar*,
         vector<pair<int, Coordinates>> edge_points(0);
 
         START_TIMER
-        get_edge_points(edge_points);
+        get_edge_points(data_points, edge_points);
         STOP_TIMER("get_edge_points")
         size_t edge_points_size = edge_points.size();
 
@@ -798,7 +798,7 @@ static void run(const gchar*,
         clock_gettime(CLOCK_REALTIME, &perf_tmp);
         perf_refinement -= perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
 
-        for (int p=0; p<8; ++p) {
+        for (int p=0; p<30; ++p) {
             int p_mod2 = p%2;
             int i_begin = edge_points_size*(p_mod2);
             int i_end   = edge_points_size*(1-p_mod2);
@@ -826,7 +826,7 @@ static void run(const gchar*,
                         }
                     }
 
-                // coherence propagation
+                // random search
                 for (int ox=-1; ox<=1; ++ox)
                     for (int oy=-1; oy<=1; ++oy) {
                         Coordinates offset(ox, oy);
@@ -869,6 +869,84 @@ static void run(const gchar*,
         }
     }
 
+    /*
+    for (int p=0; p<10; ++p) {
+        gimp_progress_update(0.5 + 0.5*float(p)/10);
+        int p_mod2 = p%2;
+        int i_begin = total_points*(p_mod2);
+        int i_end   = total_points*(1-p_mod2);
+        int i_inc   = 1 - 2*p_mod2;
+        bool converged = true;
+        random_shuffle(data_points_backup.begin(), data_points_backup.end());
+        for(int i=0; i < total_points; ++i) {
+            Coordinates position = data_points_backup[i];
+            // coherence propagation
+            for (int ox=-1; ox<=1; ++ox)
+                for (int oy=-1; oy<=1; ++oy) {
+                    Coordinates offset(ox, oy);
+                    Coordinates neighbour = position + offset;
+                    if ((ox^oy) && *data_mask.at(neighbour)) {
+                        auto neighbour_src = transfer_map.find(neighbour);
+                        if (neighbour_src != transfer_map.end()) {
+                            int best = transfer_belief[position];
+                            Coordinates best_point = transfer_map[position];
+                            if (try_point(neighbour_src->second - offset,
+                                position, best, best_point, best_color_diff))
+                            {
+                                transfer_patch(position, best_point, best);
+                                converged = false;
+                            }
+                        }
+                    }
+                }
+
+            // random search
+            for (int ox=-1; ox<=1; ++ox)
+                for (int oy=-1; oy<=1; ++oy) {
+                    Coordinates offset(ox, oy);
+                    Coordinates near_src = transfer_map[position] + offset;
+                    if ((ox||oy) && !*data_mask.at(near_src)) {
+                        int best = transfer_belief[position];
+                        Coordinates best_point = transfer_map[position];
+                        if (try_point(near_src - offset,
+                            position, best, best_point, best_color_diff))
+                        {
+                            transfer_patch(position, best_point, best);
+                            converged = false;
+                        }
+                    }
+                }
+            if (use_ref_layer) {
+                for (int t=0; t<10; ++t) {
+                    int best = transfer_belief[position];
+                    Coordinates best_point = transfer_map[position];
+                    if (try_point(ref_points[rand()%ref_points.size()],
+                        position, best, best_point, best_color_diff))
+                    {
+                        transfer_patch(position, best_point, best);
+                        converged = false;
+                    }
+                }
+            }
+        }
+        if (converged) break;
+        if (update_undo_stack) {
+            clock_gettime(CLOCK_REALTIME, &perf_tmp);
+            perf_fill_undo -= perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
+
+            // Write result to region
+            data.to_drawable(drawable, 0,0, 0);
+
+            // Voodoo to update actual image
+            gimp_drawable_flush(drawable);
+            gimp_drawable_merge_shadow(drawable->drawable_id,TRUE);
+            gimp_drawable_update(drawable->drawable_id,0,0,data.width,data.height);
+
+            clock_gettime(CLOCK_REALTIME, &perf_tmp);
+            perf_fill_undo += perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
+        }
+    }
+    */
 
     clock_gettime(CLOCK_REALTIME, &perf_tmp);
     perf_overall += perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;

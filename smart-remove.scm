@@ -130,7 +130,7 @@ Requires separate resynthesizer plug-in."
 		    SF-DRAWABLE "Input Layer" 0
 		    SF-ADJUSTMENT "Radius to take texture from" '(50 7 2000 1.0 1.0 0 1)
 		    SF-ADJUSTMENT "How many neighbour patches to consider as a source" '(225 8 40000 10.0 100.0 0 1)
-		    SF-ADJUSTMENT "How many randomly positioned patches to consider as a source" '(200 100 40000 10.0 100.0 0 1)
+		    SF-ADJUSTMENT "How many randomly positioned patches to consider as a source" '(200 10 40000 10.0 100.0 0 1)
 		    SF-ADJUSTMENT "Patch size (larger = slower)" '(3 1 50 1.0 2.0 0 1)
 		    SF-ADJUSTMENT "Transfer unit size (smaller = slower, but possibly less artifacts)" '(2 0 30 1.0 2.0 0 1)
 		    SF-TOGGLE "Invent gradients (may greatly help in plain areas without texture)" FALSE
