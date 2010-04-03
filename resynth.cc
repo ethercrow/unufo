@@ -180,7 +180,7 @@ void get_edge_points(const vector<Coordinates>& data_points, vector<pair<int, Co
     // leave only the most important edge_points
     if (edge_points.size() > important_count)
         edge_points.erase(edge_points.begin(),
-            edge_points.end()-edge_points.size()/4);
+            edge_points.end()-edge_points.size()/2);
 }
 
 void transfer_patch(const Coordinates& position, const Coordinates& source, int belief)
@@ -699,7 +699,9 @@ static void run(const gchar*,
 
     int points_to_go = total_points;
     while (points_to_go > 0) {
-        gimp_progress_update(1.0-float(points_to_go)/(total_points));
+        gimp_progress_update(
+            float(in_loop_pass_count)/(in_loop_pass_count + refine_pass_count)*
+            (1.0-float(points_to_go)/(total_points)));
         points_to_go -= purge_already_filled(data_points);
 
         clock_gettime(CLOCK_REALTIME, &perf_tmp);
@@ -798,13 +800,22 @@ static void run(const gchar*,
         clock_gettime(CLOCK_REALTIME, &perf_tmp);
         perf_refinement -= perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
 
-        for (int p=0; p<30; ++p) {
+        for (int p=0; p<in_loop_pass_count; ++p) {
             int p_mod2 = p%2;
-            int i_begin = edge_points_size*(p_mod2);
-            int i_end   = edge_points_size*(1-p_mod2);
-            int i_inc   = 1 - 2*p_mod2;
+            int i_begin;
+            int i_end;
+            int i_inc;
+            if (p_mod2) {
+                i_begin = edge_points_size-1;
+                i_end   = -1;
+                i_inc   = -1;
+            } else {
+                i_begin = 0;
+                i_end   = edge_points_size;
+                i_inc   = 1;
+            }
             bool converged = true;
-            for(int i=0; i < edge_points_size; ++i) {
+            for(int i=i_begin; i != i_end; i+=i_inc) {
                 Coordinates position = edge_points[i].second;
                 // coherence propagation
                 for (int ox=-1; ox<=1; ++ox)
@@ -842,6 +853,9 @@ static void run(const gchar*,
                             }
                         }
                     }
+                refine_callable refiner(parameters.tries, position);
+                Coordinates cand = refiner();
+                try_point(cand, position, best, best_point, best_color_diff);
             }
             if (converged) break;
         }
@@ -869,23 +883,46 @@ static void run(const gchar*,
         }
     }
 
-    /*
-    for (int p=0; p<10; ++p) {
-        gimp_progress_update(0.5 + 0.5*float(p)/10);
+    if (update_undo_stack) {
+        clock_gettime(CLOCK_REALTIME, &perf_tmp);
+        perf_fill_undo -= perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
+
+        // Write result to region
+        data.to_drawable(drawable, 0,0, 0);
+
+        // Voodoo to update actual image
+        gimp_drawable_flush(drawable);
+        gimp_drawable_merge_shadow(drawable->drawable_id,TRUE);
+        gimp_drawable_update(drawable->drawable_id,0,0,data.width,data.height);
+
+        clock_gettime(CLOCK_REALTIME, &perf_tmp);
+        perf_fill_undo += perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
+    }
+
+    for (int p=0; p<refine_pass_count; ++p) {
+        gimp_progress_update(float(in_loop_pass_count + p)/(in_loop_pass_count + refine_pass_count));
         int p_mod2 = p%2;
-        int i_begin = total_points*(p_mod2);
-        int i_end   = total_points*(1-p_mod2);
-        int i_inc   = 1 - 2*p_mod2;
+        int i_begin;
+        int i_end;
+        int i_inc;
+        if (p_mod2) {
+            i_begin = total_points-1;
+            i_end   = -1;
+            i_inc   = -1;
+        } else {
+            i_begin = 0;
+            i_end   = total_points;
+            i_inc   = 1;
+        }
         bool converged = true;
-        random_shuffle(data_points_backup.begin(), data_points_backup.end());
-        for(int i=0; i < total_points; ++i) {
+        for(int i=i_begin; i != i_end; i+=i_inc) {
             Coordinates position = data_points_backup[i];
             // coherence propagation
             for (int ox=-1; ox<=1; ++ox)
                 for (int oy=-1; oy<=1; ++oy) {
                     Coordinates offset(ox, oy);
                     Coordinates neighbour = position + offset;
-                    if ((ox^oy) && *data_mask.at(neighbour)) {
+                    if (!(ox==0 && oy==0) && *data_mask.at(neighbour)) {
                         auto neighbour_src = transfer_map.find(neighbour);
                         if (neighbour_src != transfer_map.end()) {
                             int best = transfer_belief[position];
@@ -917,7 +954,7 @@ static void run(const gchar*,
                     }
                 }
             if (use_ref_layer) {
-                for (int t=0; t<10; ++t) {
+                for (int t=0; t<parameters.tries; ++t) {
                     int best = transfer_belief[position];
                     Coordinates best_point = transfer_map[position];
                     if (try_point(ref_points[rand()%ref_points.size()],
@@ -929,24 +966,11 @@ static void run(const gchar*,
                 }
             }
         }
-        if (converged) break;
-        if (update_undo_stack) {
-            clock_gettime(CLOCK_REALTIME, &perf_tmp);
-            perf_fill_undo -= perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
-
-            // Write result to region
-            data.to_drawable(drawable, 0,0, 0);
-
-            // Voodoo to update actual image
-            gimp_drawable_flush(drawable);
-            gimp_drawable_merge_shadow(drawable->drawable_id,TRUE);
-            gimp_drawable_update(drawable->drawable_id,0,0,data.width,data.height);
-
-            clock_gettime(CLOCK_REALTIME, &perf_tmp);
-            perf_fill_undo += perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
+        if (converged) {
+            fprintf(logfile, "refinement converged on pass %d\n", p);
+            break;
         }
     }
-    */
 
     clock_gettime(CLOCK_REALTIME, &perf_tmp);
     perf_overall += perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
