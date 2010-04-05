@@ -720,12 +720,10 @@ static void run(const gchar*,
         clock_gettime(CLOCK_REALTIME, &perf_tmp);
         perf_edge_points += perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
 
-
         // find best-fit patches for edge_points
+        // TODO: this for is parallelizable
         for(int i=0; i < edge_points_size; ++i) {
             Coordinates position = edge_points[i].second;
-            if (*confidence_map.at(position))
-                continue;
 
             best = 1<<30;
             best_color_diff.assign(input_bytes, 0);
@@ -742,11 +740,18 @@ static void run(const gchar*,
             int n_neighbours = 0;
             for (int oy = -neighbour_area_size; oy<=neighbour_area_size; ++oy)
                 for (int ox = -neighbour_area_size; ox<=neighbour_area_size; ++ox) {
-                    Coordinates candidate = position + Coordinates(ox, oy);
-                    if (clip(data, candidate) && *confidence_map.at(candidate)) {
-                        START_TIMER
-                        try_point(candidate, position, best, best_point, best_color_diff);
-                        STOP_TIMER("try_point")
+                    Coordinates offset = Coordinates(ox, oy);
+                    Coordinates neighbour = position + offset;
+                    if (clip(data, neighbour)) {
+                        auto neighbour_src = transfer_map.find(neighbour);
+                        if (neighbour_src != transfer_map.end()) {
+                            try_point(neighbour_src->second - offset,
+                                position, best, best_point, best_color_diff);
+                        } else if (*data_mask.at(neighbour)) {
+                            START_TIMER
+                            try_point(neighbour, position, best, best_point, best_color_diff);
+                            STOP_TIMER("try_point")
+                        }
                         if (++n_neighbours >= parameters.neighbours) break;
                     }
                 }
@@ -758,41 +763,9 @@ static void run(const gchar*,
             // Neighbour search END
             ///////////////////////////
 
-            ///////////////////////////
-            // Random refinement BEGIN
-            ///////////////////////////
-
-            clock_gettime(CLOCK_REALTIME, &perf_tmp);
-            perf_random_search -= perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
-
-            /*
-            vector<boost::shared_future<Coordinates>> futures(0);
-            for (int t=0; t<max_threads; ++t) {
-                refine_callable refiner(parameters.tries/max_threads, position);
-                boost::packaged_task<Coordinates> pt(refiner);
-                boost::shared_future<Coordinates> f = pt.get_future();
-                boost::thread refine_thread(boost::move(pt));
-                futures.push_back(f);
-            }
-            boost::wait_for_all(futures.begin(), futures.end());
-
-
-            for (int t=0; t<max_threads; ++t) {
-                const Coordinates cand = futures[t].get();
-                try_point(cand, position, best, best_point, best_color_diff);
-            }
-            */
-
             refine_callable refiner(parameters.tries, position);
             Coordinates cand = refiner();
             try_point(cand, position, best, best_point, best_color_diff);
-
-            clock_gettime(CLOCK_REALTIME, &perf_tmp);
-            perf_random_search += perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
-
-            ///////////////////////////
-            // Random refinement END 
-            ///////////////////////////
 
             transfer_patch(position, best_point, best);
         }
@@ -815,19 +788,39 @@ static void run(const gchar*,
                 i_inc   = 1;
             }
             bool converged = true;
+
             for(int i=i_begin; i != i_end; i+=i_inc) {
                 Coordinates position = edge_points[i].second;
+                int best = transfer_belief[position];
+                Coordinates best_point = transfer_map[position];
+
                 // coherence propagation
                 for (int ox=-1; ox<=1; ++ox)
-                    for (int oy=-1; oy<=1; ++oy) {
-                        Coordinates offset(ox, oy);
-                        Coordinates neighbour = position + offset;
-                        if (*data_mask.at(neighbour)) {
-                            auto neighbour_src = transfer_map.find(neighbour);
-                            if (neighbour_src != transfer_map.end()) {
-                                int best = transfer_belief[position];
-                                Coordinates best_point = transfer_map[position];
-                                if (try_point(neighbour_src->second - offset,
+                    for (int oy=-1; oy<=1; ++oy)
+                        if (ox || oy) {
+                            Coordinates offset(ox, oy);
+                            Coordinates neighbour = position + offset;
+                            if (*data_mask.at(neighbour)) {
+                                auto neighbour_src = transfer_map.find(neighbour);
+                                if (neighbour_src != transfer_map.end()) {
+                                    if (try_point(neighbour_src->second - offset,
+                                        position, best, best_point, best_color_diff))
+                                    {
+                                        transfer_patch(position, best_point, best);
+                                        converged = false;
+                                    }
+                                }
+                            }
+                        }
+
+                // random search
+                for (int ox=-1; ox<=1; ++ox)
+                    for (int oy=-1; oy<=1; ++oy)
+                        if (ox || oy) {
+                            Coordinates offset(ox, oy);
+                            Coordinates near_src = transfer_map[position] + offset;
+                            if (!*data_mask.at(near_src)) {
+                                if (try_point(near_src - offset,
                                     position, best, best_point, best_color_diff))
                                 {
                                     transfer_patch(position, best_point, best);
@@ -835,27 +828,6 @@ static void run(const gchar*,
                                 }
                             }
                         }
-                    }
-
-                // random search
-                for (int ox=-1; ox<=1; ++ox)
-                    for (int oy=-1; oy<=1; ++oy) {
-                        Coordinates offset(ox, oy);
-                        Coordinates near_src = transfer_map[position] + offset;
-                        if (!*data_mask.at(near_src)) {
-                            int best = transfer_belief[position];
-                            Coordinates best_point = transfer_map[position];
-                            if (try_point(near_src - offset,
-                                position, best, best_point, best_color_diff))
-                            {
-                                transfer_patch(position, best_point, best);
-                                converged = false;
-                            }
-                        }
-                    }
-                refine_callable refiner(parameters.tries, position);
-                Coordinates cand = refiner();
-                try_point(cand, position, best, best_point, best_color_diff);
             }
             if (converged) break;
         }
@@ -917,16 +889,17 @@ static void run(const gchar*,
         bool converged = true;
         for(int i=i_begin; i != i_end; i+=i_inc) {
             Coordinates position = data_points_backup[i];
+            int best = transfer_belief[position];
+            Coordinates best_point = transfer_map[position];
+
             // coherence propagation
-            for (int ox=-1; ox<=1; ++ox)
-                for (int oy=-1; oy<=1; ++oy) {
+            for (int ox=-2; ox<=2; ++ox)
+                for (int oy=-2; oy<=2; ++oy) {
                     Coordinates offset(ox, oy);
                     Coordinates neighbour = position + offset;
-                    if (!(ox==0 && oy==0) && *data_mask.at(neighbour)) {
+                    if ((ox||oy) && clip(data, neighbour) && *data_mask.at(neighbour)) {
                         auto neighbour_src = transfer_map.find(neighbour);
                         if (neighbour_src != transfer_map.end()) {
-                            int best = transfer_belief[position];
-                            Coordinates best_point = transfer_map[position];
                             if (try_point(neighbour_src->second - offset,
                                 position, best, best_point, best_color_diff))
                             {
@@ -938,32 +911,23 @@ static void run(const gchar*,
                 }
 
             // random search
-            for (int ox=-1; ox<=1; ++ox)
-                for (int oy=-1; oy<=1; ++oy) {
-                    Coordinates offset(ox, oy);
-                    Coordinates near_src = transfer_map[position] + offset;
-                    if ((ox||oy) && !*data_mask.at(near_src)) {
-                        int best = transfer_belief[position];
-                        Coordinates best_point = transfer_map[position];
-                        if (try_point(near_src - offset,
-                            position, best, best_point, best_color_diff))
-                        {
-                            transfer_patch(position, best_point, best);
-                            converged = false;
-                        }
-                    }
-                }
-            if (use_ref_layer) {
-                for (int t=0; t<parameters.tries; ++t) {
+            int search_range = max(data.width, data.height);
+            while (search_range > 0) {
+                int ox = rand()%search_range;
+                int oy = rand()%search_range;
+                Coordinates offset(ox, oy);
+                Coordinates near_src = transfer_map[position] + offset;
+                if ((ox||oy) && clip(data, near_src) && !*data_mask.at(near_src)) {
                     int best = transfer_belief[position];
                     Coordinates best_point = transfer_map[position];
-                    if (try_point(ref_points[rand()%ref_points.size()],
+                    if (try_point(near_src - offset,
                         position, best, best_point, best_color_diff))
                     {
                         transfer_patch(position, best_point, best);
                         converged = false;
                     }
                 }
+                search_range /= 2;
             }
         }
         if (converged) {
