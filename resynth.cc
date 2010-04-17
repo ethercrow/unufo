@@ -82,7 +82,7 @@ static int best;
 static Coordinates best_point;
 static vector<int> best_color_diff(0);
 
-static map<Coordinates, Coordinates> transfer_map;
+static Matrix<Coordinates> transfer_map;
 static map<Coordinates, int> transfer_belief;
 
 static void setup_metric(float autism)
@@ -191,7 +191,7 @@ void transfer_patch(const Coordinates& position, const Coordinates& source, int 
     }
     // TODO: better confidence transfer
     *confidence_map.at(position) = max(10, *confidence_map.at(source) - 5); 
-    transfer_map[position] = source;
+    *transfer_map.at(position) = source;
     transfer_belief[position] = belief;
 }
 
@@ -622,6 +622,7 @@ static void run(const gchar*,
     fetch_image_and_mask(drawable, data, input_bytes, data_mask, 255, sel_x1, sel_y1, sel_x2, sel_y2);
 
     confidence_map.resize(data.width,data.height,1);
+    transfer_map.resize(data.width,data.height);
 
     vector<Coordinates> data_points(0);
 
@@ -637,7 +638,6 @@ static void run(const gchar*,
         }
 
     /* Fetch the ref_layer */
-
     if (!parameters.use_ref_layer) {
         // resynthesizer legacy
         fetch_image_and_mask(corpus_drawable, ref_layer, input_bytes, ref_mask, 0);
@@ -743,14 +743,16 @@ static void run(const gchar*,
                     Coordinates offset = Coordinates(ox, oy);
                     Coordinates neighbour = position + offset;
                     if (clip(data, neighbour)) {
-                        auto neighbour_src = transfer_map.find(neighbour);
-                        if (neighbour_src != transfer_map.end()) {
-                            try_point(neighbour_src->second - offset,
-                                position, best, best_point, best_color_diff);
-                        } else if (*data_mask.at(neighbour)) {
+                        if (!*data_mask.at(neighbour)) {
                             START_TIMER
                             try_point(neighbour, position, best, best_point, best_color_diff);
                             STOP_TIMER("try_point")
+                        } else {
+                            auto neighbour_belief = transfer_belief.find(neighbour);
+                            if (neighbour_belief != transfer_belief.end()) {
+                                try_point(*transfer_map.at(neighbour) - offset,
+                                    position, best, best_point, best_color_diff);
+                            }
                         }
                         if (++n_neighbours >= parameters.neighbours) break;
                     }
@@ -792,7 +794,7 @@ static void run(const gchar*,
             for(int i=i_begin; i != i_end; i+=i_inc) {
                 Coordinates position = edge_points[i].second;
                 int best = transfer_belief[position];
-                Coordinates best_point = transfer_map[position];
+                Coordinates best_point = *transfer_map.at(position);
 
                 // coherence propagation
                 for (int ox=-1; ox<=1; ++ox)
@@ -801,9 +803,9 @@ static void run(const gchar*,
                             Coordinates offset(ox, oy);
                             Coordinates neighbour = position + offset;
                             if (*data_mask.at(neighbour)) {
-                                auto neighbour_src = transfer_map.find(neighbour);
-                                if (neighbour_src != transfer_map.end()) {
-                                    if (try_point(neighbour_src->second - offset,
+                                auto neighbour_src = transfer_belief.find(neighbour);
+                                if (neighbour_src != transfer_belief.end()) {
+                                    if (try_point(*transfer_map.at(neighbour) - offset,
                                         position, best, best_point, best_color_diff))
                                     {
                                         transfer_patch(position, best_point, best);
@@ -819,10 +821,10 @@ static void run(const gchar*,
                     int ox = rand()%search_range;
                     int oy = rand()%search_range;
                     Coordinates offset(ox, oy);
-                    Coordinates near_src = transfer_map[position] + offset;
+                    Coordinates near_src = *transfer_map.at(position) + offset;
                     if ((ox||oy) && clip(data, near_src) && !*data_mask.at(near_src)) {
                         int best = transfer_belief[position];
-                        Coordinates best_point = transfer_map[position];
+                        Coordinates best_point = *transfer_map.at(position);
                         if (try_point(near_src - offset,
                             position, best, best_point, best_color_diff))
                         {

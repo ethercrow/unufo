@@ -61,7 +61,7 @@ struct Bitmap {
 
         delete[] data;
         data = new t[w*h*4];
-        memset(data, 0, w*h*4*sizeof(t));
+        memset(data, 0, w*h*4);
     }
 
     t *at(int x,int y) const {
@@ -110,7 +110,7 @@ struct Bitmap {
 };
 
 
-template<class T, int D>
+template<class T>
 struct Matrix {
     int width, height;
     T *data;
@@ -126,12 +126,12 @@ struct Matrix {
         height = h; 
 
         delete[] data;
-        data = new T[w*h*D];
-        memset(data, 0, w*h*D*sizeof(T));
+        data = new T[w*h*sizeof(T)];
+        memset(data, 0, w*h*sizeof(T));
     }
 
     T *at(int x,int y) const {
-        return data + (y*width+x)*D;
+        return data + (y*width+x)*sizeof(T);
     }
 
     T *at(const Coordinates position) const {
@@ -140,8 +140,8 @@ struct Matrix {
 
 private:
     /* don't copy me plz */
-    Matrix(const Matrix<T, D>&);
-    const Matrix& operator=(const Matrix<T, D>&);
+    Matrix(const Matrix<T>&);
+    const Matrix& operator=(const Matrix<T>&);
 };
 
 #endif // ESYNTH_TYPES_H
