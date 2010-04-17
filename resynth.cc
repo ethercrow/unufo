@@ -803,7 +803,7 @@ static void run(const gchar*,
                         if (ox || oy) {
                             Coordinates offset(ox, oy);
                             Coordinates neighbour = position + offset;
-                            if (*data_mask.at(neighbour)) {
+                            if (clip(data, neighbour) && *data_mask.at(neighbour)) {
                                 auto neighbour_src_p = transfer_map.at(neighbour);
                                 if (reinterpret_cast<uint64_t*>(neighbour_src_p)) {
                                     if (try_point(*neighbour_src_p - offset,
