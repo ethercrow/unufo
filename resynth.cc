@@ -83,7 +83,7 @@ static Coordinates best_point;
 static vector<int> best_color_diff(0);
 
 static Matrix<Coordinates> transfer_map;
-static map<Coordinates, int> transfer_belief;
+static Matrix<int> transfer_belief;
 
 static void setup_metric(float autism)
 {
@@ -192,7 +192,7 @@ void transfer_patch(const Coordinates& position, const Coordinates& source, int 
     // TODO: better confidence transfer
     *confidence_map.at(position) = max(10, *confidence_map.at(source) - 5); 
     *transfer_map.at(position) = source;
-    transfer_belief[position] = belief;
+    *transfer_belief.at(position) = belief;
 }
 
 /*
@@ -623,6 +623,7 @@ static void run(const gchar*,
 
     confidence_map.resize(data.width,data.height,1);
     transfer_map.resize(data.width,data.height);
+    transfer_belief.resize(data.width,data.height);
 
     vector<Coordinates> data_points(0);
 
@@ -748,9 +749,9 @@ static void run(const gchar*,
                             try_point(neighbour, position, best, best_point, best_color_diff);
                             STOP_TIMER("try_point")
                         } else {
-                            auto neighbour_belief = transfer_belief.find(neighbour);
-                            if (neighbour_belief != transfer_belief.end()) {
-                                try_point(*transfer_map.at(neighbour) - offset,
+                            auto neighbour_src_p = transfer_map.at(neighbour);
+                            if (reinterpret_cast<uint64_t*>(neighbour_src_p)) {
+                                try_point(*neighbour_src_p - offset,
                                     position, best, best_point, best_color_diff);
                             }
                         }
@@ -793,7 +794,7 @@ static void run(const gchar*,
 
             for(int i=i_begin; i != i_end; i+=i_inc) {
                 Coordinates position = edge_points[i].second;
-                int best = transfer_belief[position];
+                int best = *transfer_belief.at(position);
                 Coordinates best_point = *transfer_map.at(position);
 
                 // coherence propagation
@@ -803,9 +804,9 @@ static void run(const gchar*,
                             Coordinates offset(ox, oy);
                             Coordinates neighbour = position + offset;
                             if (*data_mask.at(neighbour)) {
-                                auto neighbour_src = transfer_belief.find(neighbour);
-                                if (neighbour_src != transfer_belief.end()) {
-                                    if (try_point(*transfer_map.at(neighbour) - offset,
+                                auto neighbour_src_p = transfer_map.at(neighbour);
+                                if (reinterpret_cast<uint64_t*>(neighbour_src_p)) {
+                                    if (try_point(*neighbour_src_p - offset,
                                         position, best, best_point, best_color_diff))
                                     {
                                         transfer_patch(position, best_point, best);
@@ -823,7 +824,7 @@ static void run(const gchar*,
                     Coordinates offset(ox, oy);
                     Coordinates near_src = *transfer_map.at(position) + offset;
                     if ((ox||oy) && clip(data, near_src) && !*data_mask.at(near_src)) {
-                        int best = transfer_belief[position];
+                        int best = *transfer_belief.at(position);
                         Coordinates best_point = *transfer_map.at(position);
                         if (try_point(near_src - offset,
                             position, best, best_point, best_color_diff))
@@ -844,24 +845,24 @@ static void run(const gchar*,
         if (!edge_points_size)
             break;
 
-        if (update_undo_stack) {
-            clock_gettime(CLOCK_REALTIME, &perf_tmp);
-            perf_fill_undo -= perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
+#ifndef NDEBUG
+        clock_gettime(CLOCK_REALTIME, &perf_tmp);
+        perf_fill_undo -= perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
 
-            /* Write result to region */
-            data.to_drawable(drawable, 0,0, 0);
+        /* Write result to region */
+        data.to_drawable(drawable, 0,0, 0);
 
-            /* Voodoo to update actual image */
-            gimp_drawable_flush(drawable);
-            gimp_drawable_merge_shadow(drawable->drawable_id,TRUE);
-            gimp_drawable_update(drawable->drawable_id,0,0,data.width,data.height);
+        /* Voodoo to update actual image */
+        gimp_drawable_flush(drawable);
+        gimp_drawable_merge_shadow(drawable->drawable_id,TRUE);
+        gimp_drawable_update(drawable->drawable_id,0,0,data.width,data.height);
 
-            clock_gettime(CLOCK_REALTIME, &perf_tmp);
-            perf_fill_undo += perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
-        }
+        clock_gettime(CLOCK_REALTIME, &perf_tmp);
+        perf_fill_undo += perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
+#endif
     }
 
-    if (update_undo_stack) {
+#ifndef NDEBUG
         clock_gettime(CLOCK_REALTIME, &perf_tmp);
         perf_fill_undo -= perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
 
@@ -875,7 +876,7 @@ static void run(const gchar*,
 
         clock_gettime(CLOCK_REALTIME, &perf_tmp);
         perf_fill_undo += perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
-    }
+#endif
 
     /*
     for (int p=0; p<refine_pass_count; ++p) {
