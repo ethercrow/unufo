@@ -8,17 +8,17 @@
 typedef struct Coordinates {
     int x, y;
     Coordinates(int _x,int _y): x(_x), y(_y) { }
-    Coordinates() { }
+    Coordinates(): x(0), y(0) { }
 
-    bool operator < (const Coordinates& other) const { 
+    bool operator< (const Coordinates& other) const { 
         return y*y+x*x < (other.y*other.y+other.x*other.x); 
     }
 
-    Coordinates operator + (const Coordinates& a) const { 
+    Coordinates operator+ (const Coordinates& a) const { 
         return Coordinates(x+a.x,y+a.y); 
     }
 
-    Coordinates operator - (const Coordinates& a) const { 
+    Coordinates operator- (const Coordinates& a) const { 
         return Coordinates(x-a.x,y-a.y); 
     }
 } Coordinates;
@@ -46,7 +46,7 @@ struct Bitmap {
     int width, height, depth;
     t *data;
 
-    Bitmap() { 
+    explicit Bitmap() { 
         data = 0;
     }
 
@@ -54,7 +54,7 @@ struct Bitmap {
         delete[] data;
     }
 
-    void size(int w,int h,int d) {
+    void resize(int w,int h,int d) {
         width = w; 
         height = h; 
         depth = d;
@@ -71,7 +71,6 @@ struct Bitmap {
     t *at(const Coordinates position) const {
         return at(position.x,position.y);
     }
-
 
     void to_drawable(GimpDrawable *drawable, int x1,int y1, int src_layer) {
         int i,j;
@@ -108,6 +107,41 @@ struct Bitmap {
 
         delete[] img;
     }
+};
+
+
+template<class T, int D>
+struct Matrix {
+    int width, height;
+    T *data;
+
+    explicit Matrix(): data(NULL) {}
+
+    ~Matrix() {
+        delete[] data;
+    }
+
+    void resize(int w, int h) {
+        width = w; 
+        height = h; 
+
+        delete[] data;
+        data = new T[w*h*D];
+        memset(data, 0, w*h*D*sizeof(T));
+    }
+
+    T *at(int x,int y) const {
+        return data + (y*width+x)*D;
+    }
+
+    T *at(const Coordinates position) const {
+        return at(position.x, position.y);
+    }
+
+private:
+    /* don't copy me plz */
+    Matrix(const Matrix<T, D>&);
+    const Matrix& operator=(const Matrix<T, D>&);
 };
 
 #endif // ESYNTH_TYPES_H

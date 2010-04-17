@@ -621,7 +621,7 @@ static void run(const gchar*,
     /* Fetch the whole image data */
     fetch_image_and_mask(drawable, data, input_bytes, data_mask, 255, sel_x1, sel_y1, sel_x2, sel_y2);
 
-    confidence_map.size(data.width,data.height,1);
+    confidence_map.resize(data.width,data.height,1);
 
     vector<Coordinates> data_points(0);
 
@@ -814,20 +814,24 @@ static void run(const gchar*,
                         }
 
                 // random search
-                for (int ox=-1; ox<=1; ++ox)
-                    for (int oy=-1; oy<=1; ++oy)
-                        if (ox || oy) {
-                            Coordinates offset(ox, oy);
-                            Coordinates near_src = transfer_map[position] + offset;
-                            if (!*data_mask.at(near_src)) {
-                                if (try_point(near_src - offset,
-                                    position, best, best_point, best_color_diff))
-                                {
-                                    transfer_patch(position, best_point, best);
-                                    converged = false;
-                                }
-                            }
+                int search_range = max(data.width, data.height);
+                while (search_range > 0) {
+                    int ox = rand()%search_range;
+                    int oy = rand()%search_range;
+                    Coordinates offset(ox, oy);
+                    Coordinates near_src = transfer_map[position] + offset;
+                    if ((ox||oy) && clip(data, near_src) && !*data_mask.at(near_src)) {
+                        int best = transfer_belief[position];
+                        Coordinates best_point = transfer_map[position];
+                        if (try_point(near_src - offset,
+                            position, best, best_point, best_color_diff))
+                        {
+                            transfer_patch(position, best_point, best);
+                            converged = false;
                         }
+                    }
+                    search_range /= 2;
+                }
             }
             if (converged) break;
         }
@@ -871,6 +875,7 @@ static void run(const gchar*,
         perf_fill_undo += perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
     }
 
+    /*
     for (int p=0; p<refine_pass_count; ++p) {
         gimp_progress_update(float(in_loop_pass_count + p)/(in_loop_pass_count + refine_pass_count));
         int p_mod2 = p%2;
@@ -935,6 +940,7 @@ static void run(const gchar*,
             break;
         }
     }
+    */
 
     clock_gettime(CLOCK_REALTIME, &perf_tmp);
     perf_overall += perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;

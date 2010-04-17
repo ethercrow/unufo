@@ -23,8 +23,8 @@ void fetch_image_and_mask(GimpDrawable *drawable, Bitmap<uint8_t> &image, int by
     int has_selection;
     GimpDrawable *mask_drawable;
 
-    image.size(drawable->width, drawable->height, bytes);
-    mask.size(drawable->width, drawable->height, 1);
+    image.resize(drawable->width, drawable->height, bytes);
+    mask.resize(drawable->width, drawable->height, 1);
 
     image.from_drawable(drawable,0,0,0);
 
@@ -37,7 +37,7 @@ void fetch_image_and_mask(GimpDrawable *drawable, Bitmap<uint8_t> &image, int by
         return;
     }
 
-    temp_mask.size(sel_x2-sel_x1, sel_y2-sel_y1, 1);
+    temp_mask.resize(sel_x2-sel_x1, sel_y2-sel_y1, 1);
 
     sel_id = gimp_image_get_selection(gimp_drawable_get_image(drawable->drawable_id));
     mask_drawable = gimp_drawable_get(sel_id);
