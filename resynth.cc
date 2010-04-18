@@ -628,10 +628,10 @@ static void run(const gchar*,
         for(int x=0;x<confidence_map.width;x++) {
             *confidence_map.at(x,y) = 0;
 
-            if (parameters.use_border && data_mask.at(x,y)[0] == 0)
+            if (!data_mask.at(x,y)[0])
                 *confidence_map.at(x,y) = 255;
 
-            if (data_mask.at(x,y)[0] != 0)
+            if (data_mask.at(x,y)[0])
                 data_points.push_back(Coordinates(x,y));
         }
 

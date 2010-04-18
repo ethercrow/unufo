@@ -24,17 +24,13 @@ typedef struct Coordinates {
 } Coordinates;
 
 struct Parameters {
-    bool h_tile, v_tile;
-    bool use_border;
     bool invent_gradients;
     bool equal_adjustment;
     bool use_ref_layer;
 
-    gint32 corpus_id, input_map_id, output_map_id;
+    gint32 corpus_id;
     gint32 ref_layer_id;
 
-    double map_weight;
-    double autism;
     gint32 neighbours, tries;
     gint32 comp_size, transfer_size;
     gint32 max_adjustment;
