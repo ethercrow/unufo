@@ -742,9 +742,6 @@ static void run(const gchar*,
         clock_gettime(CLOCK_REALTIME, &perf_tmp);
         perf_refinement += perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
 
-        if (!edge_points_size)
-            break;
-
 #ifndef NDEBUG
         clock_gettime(CLOCK_REALTIME, &perf_tmp);
         perf_fill_undo -= perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
@@ -760,23 +757,10 @@ static void run(const gchar*,
         clock_gettime(CLOCK_REALTIME, &perf_tmp);
         perf_fill_undo += perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
 #endif
+
+        if (!edge_points_size)
+            break;
     }
-
-#ifndef NDEBUG
-        clock_gettime(CLOCK_REALTIME, &perf_tmp);
-        perf_fill_undo -= perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
-
-        // Write result to region
-        data.to_drawable(drawable, 0,0, 0);
-
-        // Voodoo to update actual image
-        gimp_drawable_flush(drawable);
-        gimp_drawable_merge_shadow(drawable->drawable_id,TRUE);
-        gimp_drawable_update(drawable->drawable_id,0,0,data.width,data.height);
-
-        clock_gettime(CLOCK_REALTIME, &perf_tmp);
-        perf_fill_undo += perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
-#endif
 
     /*
     for (int p=0; p<refine_pass_count; ++p) {
