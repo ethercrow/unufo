@@ -423,7 +423,6 @@ private:
 
 
 /* This is the main function. */
-
 static void run(const gchar*,
         gint nparams,
         const GimpParam *param,
@@ -461,8 +460,6 @@ static void run(const gchar*,
     *return_vals = values;
     values[0].type = GIMP_PDB_STATUS;
     values[0].data.d_status = GIMP_PDB_SUCCESS;
-
-    init_gtk();
 
     if (!get_parameters_from_list(&parameters, nparams, param)) {
         fprintf(logfile, "get_parameters_from_list failed\n");

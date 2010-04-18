@@ -145,15 +145,5 @@ static void query()
         args, return_vals);
 }
 
-static void init_gtk()
-{
-    int argc = 1;
-    char **argv = g_new(char*,2);
-    argv[0] = "resynthesizer";
-    argv[1] = 0;
-    gtk_init(&argc, &argv);
-    gtk_rc_parse(gimp_gtkrc());
-}
-
 #endif //ESYNTH_GIMP_COMM_H
 
