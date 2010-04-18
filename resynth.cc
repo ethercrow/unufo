@@ -29,17 +29,10 @@
 #include <gtk/gtk.h>
 
 #include <vector>
-#include <map>
 #include <utility>
 #include <algorithm>
 
 using namespace std;
-
-//#include <boost/thread/thread.hpp>
-//#include <boost/thread/future.hpp>
-
-#include <libgimp/gimp.h>
-#include <libgimp/gimpui.h>
 
 #include "unufo_types.h"
 #include "unufo_consts.h"
@@ -55,12 +48,11 @@ static int* diff_table_0; // shifted so that diff_table_0[0] == diff_table[256] 
 static int max_diff;
 
 static int input_bytes;
-static int comp_patch_radius, transfer_patch_radius;
+static int comp_patch_radius;
 
 static bool equal_adjustment;
 static int max_adjustment;
 
-static bool invent_gradients;
 static bool use_ref_layer;
 
 // we must fill selection subset of data
@@ -167,7 +159,9 @@ void get_edge_points(const vector<Coordinates>& data_points, vector<pair<int, Co
                 if (*confidence_map.at(position + Coordinates(ox, oy)))
                     island_flag = false;
         if (!island_flag) {
+            START_TIMER
             int complexity = get_complexity(data_points[i]);
+            STOP_TIMER("get_complexity")
             edge_points.push_back(std::make_pair(complexity, data_points[i]));
         }
     }
@@ -184,7 +178,7 @@ void get_edge_points(const vector<Coordinates>& data_points, vector<pair<int, Co
 
 void transfer_patch(const Coordinates& position, const Coordinates& source, int belief)
 {
-    for(int j=0;j<input_bytes;j++) {
+    for(int j=0; j<input_bytes; j++) {
         int new_color = data.at(source)[j] + best_color_diff[j];
         data.at(position)[j] = new_color;
     }
@@ -193,34 +187,6 @@ void transfer_patch(const Coordinates& position, const Coordinates& source, int 
     *transfer_map.at(position) = source;
     *transfer_belief.at(position) = belief;
 }
-
-/*
-void transfer_patch(const Coordinates& position, const Coordinates& source)
-{
-    for (int ox=-transfer_patch_radius; ox<=transfer_patch_radius; ++ox)
-        for (int oy=-transfer_patch_radius; oy<=transfer_patch_radius; ++oy) {
-            Coordinates offset(ox, oy);
-            Coordinates near_dst = position + offset;
-            Coordinates near_src = source + offset;
-            // transfer only defined points and only to undefined points
-            if (clip(data, near_dst) && clip(data, near_src) &&
-                !(*confidence_map.at(near_dst)) &&
-                *confidence_map.at(near_src))
-            {
-                for(int j=0;j<input_bytes;j++) {
-                    int new_color = data.at(near_src)[j] + best_color_diff[j];
-                    //if (new_color < -256) new_color = 0;
-                    //if (new_color >  255) new_color = 255;
-                    data.at(near_dst)[j] = new_color;
-                }
-                // TODO: better confidence transfer
-                *confidence_map.at(near_dst) = max(10,
-                    *confidence_map.at(near_src) - 5); 
-            }
-        }
-    transfer_map[position] = source;
-}
-*/
 
 // TODO: consider mirroring and rotation by passing orientation
 // collect pixels defined both near pos and near candidate
@@ -392,71 +358,6 @@ static int get_difference(const Coordinates& candidate,
         return best;
 }
 
-// return patch dissimilarity with linear gradient patch
-// algorithm is sort of poor man linear regression
-static int get_gradientness(const Coordinates& position, 
-        int mean_values[], int grad_x[], int grad_y[])
-{
-    int defined_count = 0;
-    int defined_ox_count = 0;
-    int defined_oy_count = 0;
-
-    memset(mean_values, 0, input_bytes*sizeof(int));
-    memset(grad_x, 0, input_bytes*sizeof(int));
-    memset(grad_y, 0, input_bytes*sizeof(int));
-
-    // calculate mean values
-    for (int ox=-comp_patch_radius; ox<=comp_patch_radius; ++ox)
-        for (int oy=-comp_patch_radius; oy<=comp_patch_radius; ++oy) {
-            Coordinates near_pos = position + Coordinates(ox, oy);
-            if (clip(data, near_pos) && *confidence_map.at(near_pos)) {
-                ++defined_count;
-                for (int j = 0; j<input_bytes; ++j)
-                    mean_values[j] += data.at(near_pos)[j];
-            }
-        }
-
-    for (int j = 0; j<input_bytes; ++j)
-        mean_values[j] /= defined_count;
-
-    // calculate gradient
-    for (int ox=-comp_patch_radius; ox<=comp_patch_radius; ++ox)
-        for (int oy=-comp_patch_radius; oy<=comp_patch_radius; ++oy) {
-            Coordinates near_pos = position + Coordinates(ox, oy);
-            if (clip(data, near_pos) && *confidence_map.at(near_pos)) {
-                if (ox) {
-                    ++defined_ox_count;
-                    for (int j = 0; j<input_bytes; ++j)
-                        grad_x[j] += (data.at(near_pos)[j] - mean_values[j])/ox;
-                }
-                if (oy) {
-                    ++defined_oy_count;
-                    for (int j = 0; j<input_bytes; ++j)
-                        grad_y[j] += (data.at(near_pos)[j] - mean_values[j])/oy;
-                }
-            }
-        }
-
-    for (int j = 0; j<input_bytes; ++j) {
-        grad_x[j] /= defined_ox_count;
-        grad_y[j] /= defined_oy_count;
-    }
-
-    // calculate dissimilarity with gradient
-    int error_sum = 0;
-    for (int ox=-comp_patch_radius; ox<=comp_patch_radius; ++ox)
-        for (int oy=-comp_patch_radius; oy<=comp_patch_radius; ++oy) {
-            Coordinates near_pos = position + Coordinates(ox, oy);
-            if (clip(data, near_pos) && *confidence_map.at(near_pos)) 
-                for (int j = 0; j<input_bytes; ++j) {
-                    int d = (data.at(near_pos)[j] - mean_values[j] - (grad_x[j]*ox) - (grad_y[j]*oy));
-                    error_sum += diff_table_0[d];
-                }
-        }
-
-    return error_sum;
-}
-
 static inline bool try_point(const Coordinates& candidate,
                              const Coordinates& position,
                              int& best,
@@ -607,11 +508,9 @@ static void run(const gchar*,
     gimp_progress_update(0.0);
 
     comp_patch_radius     = parameters.comp_size;
-    transfer_patch_radius = parameters.transfer_size;
 
     equal_adjustment = parameters.equal_adjustment;
     max_adjustment   = parameters.max_adjustment;
-    invent_gradients = parameters.invent_gradients;
 
     input_bytes  = drawable->bpp;
 
@@ -658,19 +557,19 @@ static void run(const gchar*,
 
     /* little geometry so that sel_x1 and sel_y1 are now corpus_offset */
 
-    if (sel_x2 >= data.width - max(comp_patch_radius, transfer_patch_radius))
-        sel_x2 = data.width - max(comp_patch_radius, transfer_patch_radius) - 1;
+    if (sel_x2 >= data.width - comp_patch_radius)
+        sel_x2 = data.width - comp_patch_radius - 1;
 
-    if (sel_y2 >= data.height - max(comp_patch_radius, transfer_patch_radius))
-        sel_y2 = data.height - max(comp_patch_radius, transfer_patch_radius) - 1;
+    if (sel_y2 >= data.height - comp_patch_radius)
+        sel_y2 = data.height - comp_patch_radius - 1;
 
     sel_x1 -= (ref_layer.width  - (sel_x2-sel_x1))/2;
-    sel_x1 = max(max(comp_patch_radius, transfer_patch_radius), sel_x1);
+    sel_x1 = max(comp_patch_radius, sel_x1);
     sel_y1 -= (ref_layer.height - (sel_y2-sel_y1))/2;
-    sel_y1 = max(max(comp_patch_radius, transfer_patch_radius), sel_y1);
+    sel_y1 = max(comp_patch_radius, sel_y1);
 
-    sel_x2 = min(sel_x1 + ref_layer.width, data.width - max(comp_patch_radius, transfer_patch_radius) - 1);
-    sel_y2 = min(sel_y1 + ref_layer.height, data.height - max(comp_patch_radius, transfer_patch_radius) - 1);
+    sel_x2 = min(sel_x1 + ref_layer.width, data.width - comp_patch_radius - 1);
+    sel_y2 = min(sel_y1 + ref_layer.height, data.height - comp_patch_radius - 1);
 
     /* Sanity check */
 
@@ -711,9 +610,7 @@ static void run(const gchar*,
         // first element in pair is complexity of point neighbourhood
         vector<pair<int, Coordinates>> edge_points(0);
 
-        START_TIMER
         get_edge_points(data_points, edge_points);
-        STOP_TIMER("get_edge_points")
         size_t edge_points_size = edge_points.size();
 
         clock_gettime(CLOCK_REALTIME, &perf_tmp);
@@ -768,7 +665,9 @@ static void run(const gchar*,
             Coordinates cand = refiner();
             try_point(cand, position, best, best_point, best_color_diff);
 
+            START_TIMER
             transfer_patch(position, best_point, best);
+            STOP_TIMER("transfer_patch")
         }
 
         clock_gettime(CLOCK_REALTIME, &perf_tmp);
