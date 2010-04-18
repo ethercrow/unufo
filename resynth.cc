@@ -85,7 +85,7 @@ static vector<int> best_color_diff(0);
 static Matrix<Coordinates> transfer_map;
 static Matrix<int> transfer_belief;
 
-static void setup_metric(float autism)
+static void setup_metric()
 {
     // TODO: improve patch difference metric
     for(int i=-256;i<256;i++)
@@ -143,19 +143,18 @@ static int get_complexity(const Coordinates& point)
     return weighted_dev;
 }
 
-int purge_already_filled(vector<Coordinates>& data_points)
+struct already_filled_pred
 {
-    int result = 0;
-    for(size_t i=0; i < data_points.size(); ++i) {
-        Coordinates position = data_points[i];
-
-        // check if this point has been already set
-        if (*confidence_map.at(position)) {
-            data_points.erase(data_points.begin() + i--);
-            ++result;
-        }
+    bool operator()(const Coordinates& position) {
+        return *confidence_map.at(position);
     }
-    return result;
+};
+
+void purge_already_filled(vector<Coordinates>& data_points)
+{
+    data_points.erase(
+        std::remove_if(data_points.begin(), data_points.end(), already_filled_pred()),
+        data_points.end());
 }
 
 void get_edge_points(const vector<Coordinates>& data_points, vector<pair<int, Coordinates>>& edge_points)
@@ -540,10 +539,8 @@ static void run(const gchar*,
     int64_t perf_random_search    = 0;
     int64_t perf_refinement       = 0;
 
-    int64_t perf_sol_propagation  = 0;
-    int successful_sol_prop_cnt = 0;
+    int converge_count = 0;
 
-    int64_t perf_interpolation    = 0;
     int64_t perf_fill_undo        = 0;
     int64_t perf_edge_points      = 0;
     struct timespec perf_tmp;
@@ -685,7 +682,7 @@ static void run(const gchar*,
 
     /* Setup */
 
-    setup_metric(parameters.autism);
+    setup_metric();
 
     /* Do it */
 
@@ -703,7 +700,8 @@ static void run(const gchar*,
         gimp_progress_update(
             float(in_loop_pass_count)/(in_loop_pass_count + refine_pass_count)*
             (1.0-float(points_to_go)/(total_points)));
-        points_to_go -= purge_already_filled(data_points);
+        purge_already_filled(data_points);
+        points_to_go = data_points.size();
 
         clock_gettime(CLOCK_REALTIME, &perf_tmp);
         perf_edge_points -= perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
@@ -836,7 +834,10 @@ static void run(const gchar*,
                     search_range /= 2;
                 }
             }
-            if (converged) break;
+            if (converged) {
+                ++converge_count;
+                break;
+            }
         }
 
         clock_gettime(CLOCK_REALTIME, &perf_tmp);
@@ -953,9 +954,7 @@ static void run(const gchar*,
     fprintf(logfile, "neighbour search took %lld usec\n", perf_neighbour_search/1000);
     fprintf(logfile, "random search took %lld usec\n", perf_random_search/1000);
     fprintf(logfile, "refinement took %lld usec\n", perf_refinement/1000);
-    fprintf(logfile, "solution propagation took %lld usec and was useful in %d cases\n",
-            perf_sol_propagation/1000, successful_sol_prop_cnt);
-    fprintf(logfile, "interpolation took %lld usec\n", perf_interpolation/1000);
+    fprintf(logfile, "early converge count: %d\n", converge_count);
     fprintf(logfile, "updating undo stack took %lld usec\n", perf_fill_undo/1000);
     fprintf(logfile, "overall time: %lld usec\n", perf_overall/1000);
     fclose(logfile);
