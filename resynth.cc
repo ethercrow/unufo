@@ -89,23 +89,32 @@ static void setup_metric()
 // structural complexity of point's neighbourhood
 static int get_complexity(const Coordinates& point)
 {
+#ifndef NDEBUG
+    fprintf(logfile, "%s begin\n", __func__);
+    fflush(logfile);
+#endif
     // TODO: improve complexity metric
     int confidence_sum = 0;
+    int defined_count = 0;
 
     // get mean color
-    vector<Coordinates> defined_points(0);
+    Coordinates defined_points[comp_patch_radius*comp_patch_radius*4 + comp_patch_radius*4 + 1];
     for (int ox=-comp_patch_radius; ox<=comp_patch_radius; ++ox)
         for (int oy=-comp_patch_radius; oy<=comp_patch_radius; ++oy) {
             Coordinates point_off = point + Coordinates(ox, oy);
             if (clip(data, point_off) && *confidence_map.at(point_off)) {
                 confidence_sum += *confidence_map.at(point_off);
-                defined_points.push_back(point_off);
+                defined_points[defined_count++] = point_off;
             }
         }
 
-    int defined_count = defined_points.size();
-    if (!defined_count)
+    if (!defined_count) {
+#ifndef NDEBUG
+        fprintf(logfile, "%s end\n", __func__);
+        fflush(logfile);
+#endif
         return -1;
+    }
 
     int mean_values[input_bytes];
     for (int j = 0; j<input_bytes; ++j)
@@ -132,6 +141,10 @@ static int get_complexity(const Coordinates& point)
     // multiply by average confidence among defined points
     weighted_dev *= (confidence_sum/defined_count);
 
+#ifndef NDEBUG
+    fprintf(logfile, "%s end\n", __func__);
+    fflush(logfile);
+#endif
     return weighted_dev;
 }
 
@@ -178,6 +191,11 @@ void get_edge_points(const vector<Coordinates>& data_points, vector<pair<int, Co
 
 void transfer_patch(const Coordinates& position, const Coordinates& source, int belief)
 {
+#ifndef NDEBUG
+    fprintf(logfile, "%s begin (%d, %d) -> (%d, %d), %d\n",
+        __func__, source.x, source.y, position.x, position.y, belief);
+    fflush(logfile);
+#endif
     for(int j=0; j<input_bytes; j++) {
         int new_color = data.at(source)[j] + best_color_diff[j];
         data.at(position)[j] = new_color;
@@ -186,6 +204,10 @@ void transfer_patch(const Coordinates& position, const Coordinates& source, int 
     *confidence_map.at(position) = max(10, *confidence_map.at(source) - 5); 
     *transfer_map.at(position) = source;
     *transfer_belief.at(position) = belief;
+#ifndef NDEBUG
+    fprintf(logfile, "%s end\n", __func__);
+    fflush(logfile);
+#endif
 }
 
 // TODO: consider mirroring and rotation by passing orientation
@@ -194,15 +216,25 @@ inline int collect_defined_in_both_areas(const Coordinates& position, const Coor
                 uint8_t* def_n_p, uint8_t* def_n_c,
                 int& defined_only_near_pos, int& confidence_sum)
 {
+#ifndef NDEBUG
+    fprintf(logfile, "%s begin (%d, %d) && (%d, %d)\n", __func__, position.x, position.y,
+            candidate.x, candidate.y);
+    fflush(logfile);
+#endif
+
     int defined_count = 0;
     confidence_sum = 0;
     defined_only_near_pos = 0;
 
-    // figure out if we need to check boundaries regurarly
+    // figure out if we need to check boundaries in-loop 
     bool far_from_boundary = (position.x - comp_patch_radius >= 0 &&
                               position.y - comp_patch_radius >= 0 &&
-                              position.x + comp_patch_radius <  data.width &&
-                              position.y + comp_patch_radius <  data.height
+                              position.x + comp_patch_radius < data.width &&
+                              position.y + comp_patch_radius < data.height &&
+                              candidate.x - comp_patch_radius >= 0 &&
+                              candidate.y - comp_patch_radius >= 0 &&
+                              candidate.x + comp_patch_radius < data.width &&
+                              candidate.y + comp_patch_radius < data.height
     );
 
     uint8_t* d_n_p =        data.at(position  + Coordinates(-comp_patch_radius, -comp_patch_radius));
@@ -210,10 +242,10 @@ inline int collect_defined_in_both_areas(const Coordinates& position, const Coor
     uint8_t* ds_n_p = confidence_map.at(position  + Coordinates(-comp_patch_radius, -comp_patch_radius));
     uint8_t* ds_n_c = confidence_map.at(candidate + Coordinates(-comp_patch_radius, -comp_patch_radius));
 
-    int d_shift  = 4*(data.width - (comp_patch_radius<<1) - 1);
+    int d_shift  = 4*(data.width - (2*comp_patch_radius + 1));
     for (int oy=-comp_patch_radius; oy<=comp_patch_radius; ++oy) {
         for (int ox=-comp_patch_radius; ox<=comp_patch_radius; ++ox) {
-            if (far_from_boundary || 
+            if (far_from_boundary ||
                    (position.x + ox >= 0 &&
                     position.y + oy >= 0 &&
                     position.x + ox < data.width &&
@@ -250,6 +282,10 @@ inline int collect_defined_in_both_areas(const Coordinates& position, const Coor
         ds_n_p += d_shift;
         ds_n_c += d_shift;
     }
+#ifndef NDEBUG
+    fprintf(logfile, "%s end\n", __func__);
+    fflush(logfile);
+#endif
     return defined_count;
 }
 
@@ -364,12 +400,20 @@ static inline bool try_point(const Coordinates& candidate,
                              Coordinates& best_point,
                              vector<int>& best_color_diff)
 {
+#ifndef NDEBUG
+    fprintf(logfile, "%s begin\n", __func__);
+    fflush(logfile);
+#endif
     int difference;
     if (max_adjustment)
         difference = get_difference_color_adjustment(candidate, position, best_color_diff);
     else
         difference = get_difference(candidate, position);
 
+#ifndef NDEBUG
+    fprintf(logfile, "%s end\n", __func__);
+    fflush(logfile);
+#endif
     if (best <= difference)
         return false;
     best = difference;
@@ -383,6 +427,10 @@ public:
     refine_callable(int n, const Coordinates& position): n_(n), position_(position){}
 
     Coordinates operator()() {
+#ifndef NDEBUG
+    fprintf(logfile, "%s begin for (%d, %d)\n", __func__, position_.x, position_.y);
+    fflush(logfile);
+#endif
         // thread local vars
         int tl_best = 1<<30;
         Coordinates tl_best_point;
@@ -414,6 +462,10 @@ public:
                 try_point(Coordinates(x, y), position_, tl_best, tl_best_point, tl_best_color_diff);
             }
         }
+#ifndef NDEBUG
+    fprintf(logfile, "%s returning (%d, %d)\n", __func__, tl_best_point.x, tl_best_point.y);
+    fflush(logfile);
+#endif
         return tl_best_point;
     }
 private:
@@ -643,8 +695,9 @@ static void run(const gchar*,
                         } else {
                             auto neighbour_src_p = transfer_map.at(neighbour);
                             if (reinterpret_cast<uint64_t*>(neighbour_src_p)) {
-                                try_point(*neighbour_src_p - offset,
-                                    position, best, best_point, best_color_diff);
+                                Coordinates near_neighbour_src = *neighbour_src_p - offset;
+                                if (clip(data, near_neighbour_src))
+                                    try_point(near_neighbour_src, position, best, best_point, best_color_diff);
                             }
                         }
                         if (++n_neighbours >= parameters.neighbours) break;
@@ -700,8 +753,9 @@ static void run(const gchar*,
                             if (clip(data, neighbour) && *data_mask.at(neighbour)) {
                                 auto neighbour_src_p = transfer_map.at(neighbour);
                                 if (reinterpret_cast<uint64_t*>(neighbour_src_p)) {
-                                    if (try_point(*neighbour_src_p - offset,
-                                        position, best, best_point, best_color_diff))
+                                    Coordinates near_neighbour_src = *neighbour_src_p - offset;
+                                    if (clip(data, near_neighbour_src) &&
+                                        try_point(near_neighbour_src, position, best, best_point, best_color_diff))
                                     {
                                         transfer_patch(position, best_point, best);
                                         converged = false;
@@ -759,7 +813,6 @@ static void run(const gchar*,
             break;
     }
 
-    /*
     for (int p=0; p<refine_pass_count; ++p) {
         gimp_progress_update(float(in_loop_pass_count + p)/(in_loop_pass_count + refine_pass_count));
         int p_mod2 = p%2;
@@ -778,26 +831,28 @@ static void run(const gchar*,
         bool converged = true;
         for(int i=i_begin; i != i_end; i+=i_inc) {
             Coordinates position = data_points_backup[i];
-            int best = transfer_belief[position];
-            Coordinates best_point = transfer_map[position];
+            int best = *transfer_belief.at(position);
+            Coordinates best_point = *transfer_map.at(position);
 
             // coherence propagation
-            for (int ox=-2; ox<=2; ++ox)
-                for (int oy=-2; oy<=2; ++oy) {
-                    Coordinates offset(ox, oy);
-                    Coordinates neighbour = position + offset;
-                    if ((ox||oy) && clip(data, neighbour) && *data_mask.at(neighbour)) {
-                        auto neighbour_src = transfer_map.find(neighbour);
-                        if (neighbour_src != transfer_map.end()) {
-                            if (try_point(neighbour_src->second - offset,
-                                position, best, best_point, best_color_diff))
-                            {
-                                transfer_patch(position, best_point, best);
-                                converged = false;
+            for (int ox=-1; ox<=1; ++ox)
+                for (int oy=-1; oy<=1; ++oy)
+                    if (ox || oy) {
+                        Coordinates offset(ox, oy);
+                        Coordinates neighbour = position + offset;
+                        if (clip(data, neighbour) && *data_mask.at(neighbour)) {
+                            auto neighbour_src_p = transfer_map.at(neighbour);
+                            if (reinterpret_cast<uint64_t*>(neighbour_src_p)) {
+                                Coordinates near_neighbour_src = *neighbour_src_p - offset;
+                                if (clip(data, near_neighbour_src) &&
+                                    try_point(near_neighbour_src, position, best, best_point, best_color_diff))
+                                {
+                                    transfer_patch(position, best_point, best);
+                                    converged = false;
+                                }
                             }
                         }
                     }
-                }
 
             // random search
             int search_range = max(data.width, data.height);
@@ -805,10 +860,10 @@ static void run(const gchar*,
                 int ox = rand()%search_range;
                 int oy = rand()%search_range;
                 Coordinates offset(ox, oy);
-                Coordinates near_src = transfer_map[position] + offset;
+                Coordinates near_src = *transfer_map.at(position) + offset;
                 if ((ox||oy) && clip(data, near_src) && !*data_mask.at(near_src)) {
-                    int best = transfer_belief[position];
-                    Coordinates best_point = transfer_map[position];
+                    int best = *transfer_belief.at(position);
+                    Coordinates best_point = *transfer_map.at(position);
                     if (try_point(near_src - offset,
                         position, best, best_point, best_color_diff))
                     {
@@ -819,12 +874,7 @@ static void run(const gchar*,
                 search_range /= 2;
             }
         }
-        if (converged) {
-            fprintf(logfile, "refinement converged on pass %d\n", p);
-            break;
-        }
     }
-    */
 
     clock_gettime(CLOCK_REALTIME, &perf_tmp);
     perf_overall += perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
