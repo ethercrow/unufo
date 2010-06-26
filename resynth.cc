@@ -199,85 +199,6 @@ void transfer_patch(const Coordinates& position, const Coordinates& source, int 
 #endif
 }
 
-// TODO: consider mirroring and rotation by passing orientation
-// collect pixels defined both near pos and near candidate
-inline int collect_defined_in_both_areas(const Coordinates& position, const Coordinates& candidate,
-                uint8_t* def_n_p, uint8_t* def_n_c,
-                int& defined_only_near_pos, int& confidence_sum)
-{
-#ifndef NDEBUG
-    fprintf(logfile, "%s begin (%d, %d) && (%d, %d)\n", __func__, position.x, position.y,
-            candidate.x, candidate.y);
-    fflush(logfile);
-#endif
-
-    int defined_count = 0;
-    confidence_sum = 0;
-    defined_only_near_pos = 0;
-
-    // figure out if we need to check boundaries in-loop 
-    bool far_from_boundary = (position.x - comp_patch_radius >= 0 &&
-                              position.y - comp_patch_radius >= 0 &&
-                              position.x + comp_patch_radius < data.width &&
-                              position.y + comp_patch_radius < data.height &&
-                              candidate.x - comp_patch_radius >= 0 &&
-                              candidate.y - comp_patch_radius >= 0 &&
-                              candidate.x + comp_patch_radius < data.width &&
-                              candidate.y + comp_patch_radius < data.height
-    );
-
-    uint8_t* d_n_p =        data.at(position  + Coordinates(-comp_patch_radius, -comp_patch_radius));
-    uint8_t* d_n_c =        data.at(candidate + Coordinates(-comp_patch_radius, -comp_patch_radius));
-    uint8_t* ds_n_p = confidence_map.at(position  + Coordinates(-comp_patch_radius, -comp_patch_radius));
-    uint8_t* ds_n_c = confidence_map.at(candidate + Coordinates(-comp_patch_radius, -comp_patch_radius));
-
-    int d_shift  = 4*(data.width - (2*comp_patch_radius + 1));
-    for (int oy=-comp_patch_radius; oy<=comp_patch_radius; ++oy) {
-        for (int ox=-comp_patch_radius; ox<=comp_patch_radius; ++ox) {
-            if (far_from_boundary ||
-                   (position.x + ox >= 0 &&
-                    position.y + oy >= 0 &&
-                    position.x + ox < data.width &&
-                    position.y + oy < data.height &&
-                    candidate.x + ox >= 0 &&
-                    candidate.y + oy >= 0 &&
-                    candidate.x + ox < data.width &&
-                    candidate.y + oy < data.height)
-               )
-            {
-                if (*ds_n_c && *ds_n_p)
-                {
-                    confidence_sum += *ds_n_c;
-                    ++defined_count;
-
-                    // 4 byte copy
-                    *((int32_t*)def_n_p) = *((int32_t*)d_n_p);
-                    *((int32_t*)def_n_c) = *((int32_t*)d_n_c);
-
-                    def_n_p += 4;
-                    def_n_c += 4;
-                } else if (!*ds_n_c) {
-                    // also collect number of points defined only near destination pos
-                    ++defined_only_near_pos;
-                }
-            }
-            d_n_p  += 4;
-            d_n_c  += 4;
-            ds_n_p += 4;
-            ds_n_c += 4;
-        }
-        d_n_p  += d_shift;
-        d_n_c  += d_shift;
-        ds_n_p += d_shift;
-        ds_n_c += d_shift;
-    }
-#ifndef NDEBUG
-    fprintf(logfile, "%s end\n", __func__);
-    fflush(logfile);
-#endif
-    return defined_count;
-}
-
 static int get_difference_color_adjustment(const Coordinates& candidate,
                           const Coordinates& position,
                           vector<int>& best_color_diff)
@@ -293,7 +214,9 @@ static int get_difference_color_adjustment(const Coordinates& candidate,
     uint8_t  defined_near_pos [max_defined_size];
     uint8_t  defined_near_cand[max_defined_size];
 
-    int compared_count = collect_defined_in_both_areas(position, candidate,
+    int compared_count = collect_defined_in_both_areas(data, confidence_map,
+            position, candidate,
+            comp_patch_radius,
             defined_near_pos, defined_near_cand,
             defined_only_near_pos, confidence_sum);
 
@@ -358,7 +281,9 @@ static int get_difference(const Coordinates& candidate,
     uint8_t defined_near_pos [max_defined_size];
     uint8_t defined_near_cand[max_defined_size];
 
-    int compared_count = collect_defined_in_both_areas(position, candidate,
+    int compared_count = collect_defined_in_both_areas(data, confidence_map,
+            position, candidate,
+            comp_patch_radius,
             defined_near_pos, defined_near_cand,
             defined_only_near_pos, confidence_sum);
 
@@ -411,7 +336,7 @@ static inline bool try_point(const Coordinates& candidate,
 class refine_callable
 {
 public:
-    refine_callable(int n, const Coordinates& position): n_(n), position_(position){}
+    refine_callable(int n, const Coordinates& position): n_{n}, position_{position}{}
 
     Coordinates operator()() {
 #ifndef NDEBUG
@@ -419,22 +344,22 @@ public:
     fflush(logfile);
 #endif
         // thread local vars
-        int tl_best = 1<<30;
+        int tl_best{1<<30};
         Coordinates tl_best_point;
-        vector<int> tl_best_color_diff(4, 0);
+        vector<int> tl_best_color_diff{0, 0, 0, 0};
 
         // TODO: unify these branches, use ref_points with border
         // bonus point: this will fix the FIXME dozen lines below
         if (use_ref_layer) {
-            int ref_points_size = ref_points.size();
+            int ref_points_size{ref_points.size()};
             if (n_ < ref_points_size) { // random guesses
                 for (int j=0; j<n_; ++j) {
-                    const Coordinates& candidate = ref_points[rand()%ref_points_size];
+                    const Coordinates& candidate{ref_points[rand()%ref_points_size]};
                     try_point(candidate, position_, tl_best, tl_best_point, tl_best_color_diff);
                 }
             } else { // exhaustive search
                 for (int j=0; j<ref_points_size; ++j) {
-                    const Coordinates& candidate = ref_points[j];
+                    const Coordinates& candidate{ref_points[j]};
                     try_point(candidate, position_, tl_best, tl_best_point, tl_best_color_diff);
                 }
             }

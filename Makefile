@@ -9,6 +9,7 @@ CXXFLAGS=$(GIMP_CFLAGS) -O2 -fno-common -ffast-math -frename-registers -fomit-fr
 
 LDFLAGS=$(GIMP_LDFLAGS) -lm #-lboost_thread
 
+OBJS=resynth.o unufo_geometry.o
 
 all: resynth
 	@echo
@@ -25,8 +26,11 @@ install: resynth smart-remove.scm
 	@echo "  * Filters/Enhance/Heal selection"
 	@echo
 
-resynth: resynth.cc *.h
-	$(CXX) $(CXXFLAGS) -o $@ resynth.cc $(LDFLAGS)
+resynth: $(OBJS)
+	$(CXX) $(CXXFLAGS) -o $@ $^ $(LDFLAGS)
+
+$(OBJS): %.o: %.cc
+	$(CXX) -c $(CXXFLAGS) -o $@ $^
 
 clean:
 	-rm -f *~ *.o core resynth
