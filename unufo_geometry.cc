@@ -13,12 +13,6 @@ int collect_defined_in_both_areas(const Bitmap<uint8_t>& data,
         uint8_t* def_n_p, uint8_t* def_n_c,
         int& defined_only_near_pos, int& confidence_sum)
 {
-#ifndef NDEBUG
-    fprintf(logfile, "%s begin (%d, %d) && (%d, %d)\n", __func__, position.x, position.y,
-            candidate.x, candidate.y);
-    fflush(logfile);
-#endif
-
     int defined_count = 0;
     confidence_sum = 0;
     defined_only_near_pos = 0;
@@ -31,11 +25,10 @@ int collect_defined_in_both_areas(const Bitmap<uint8_t>& data,
                               candidate.x - area_size >= 0 &&
                               candidate.y - area_size >= 0 &&
                               candidate.x + area_size < data.width &&
-                              candidate.y + area_size < data.height
-    );
+                              candidate.y + area_size < data.height);
 
-    uint8_t* d_n_p =        data.at(position  + Coordinates(-area_size, -area_size));
-    uint8_t* d_n_c =        data.at(candidate + Coordinates(-area_size, -area_size));
+    uint8_t* d_n_p =  data.at(position  + Coordinates(-area_size, -area_size));
+    uint8_t* d_n_c =  data.at(candidate + Coordinates(-area_size, -area_size));
     uint8_t* ds_n_p = confidence_map.at(position  + Coordinates(-area_size, -area_size));
     uint8_t* ds_n_c = confidence_map.at(candidate + Coordinates(-area_size, -area_size));
 
@@ -79,11 +72,8 @@ int collect_defined_in_both_areas(const Bitmap<uint8_t>& data,
         ds_n_p += d_shift;
         ds_n_c += d_shift;
     }
-#ifndef NDEBUG
-    fprintf(logfile, "%s end\n", __func__);
-    fflush(logfile);
-#endif
     return defined_count;
 }
 
 }
+

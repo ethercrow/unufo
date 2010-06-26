@@ -36,8 +36,9 @@
 #include "unufo_consts.h"
 #include "unufo_geometry.h"
 #include "unufo_gimp_comm.h"
-#include "unufo_types.h"
+#include "unufo_patch.h"
 #include "unufo_pixel.h"
+#include "unufo_types.h"
 
 using namespace std;
 using namespace unufo;
@@ -178,134 +179,6 @@ void get_edge_points(const vector<Coordinates>& data_points, vector<pair<int, Co
             edge_points.end()-edge_points.size()/2);
 }
 
-void transfer_patch(const Coordinates& position, const Coordinates& source, int belief)
-{
-#ifndef NDEBUG
-    fprintf(logfile, "%s begin (%d, %d) -> (%d, %d), %d\n",
-        __func__, source.x, source.y, position.x, position.y, belief);
-    fflush(logfile);
-#endif
-    for(int j=0; j<input_bytes; j++) {
-        int new_color = data.at(source)[j] + best_color_diff[j];
-        data.at(position)[j] = new_color;
-    }
-    // TODO: better confidence transfer
-    *confidence_map.at(position) = max(10, *confidence_map.at(source) - 5); 
-    *transfer_map.at(position) = source;
-    *transfer_belief.at(position) = belief;
-#ifndef NDEBUG
-    fprintf(logfile, "%s end\n", __func__);
-    fflush(logfile);
-#endif
-}
-
-static int get_difference_color_adjustment(const Coordinates& candidate,
-                          const Coordinates& position,
-                          vector<int>& best_color_diff)
-{
-    int max_defined_size = 4*(2*comp_patch_radius + 1)*(2*comp_patch_radius + 1);
-    int defined_only_near_pos;
-    int confidence_sum;
-    int accum[4];
-    //memset(accum, 0, 4*sizeof(int));
-    *((int64_t*)accum) = 0LL;
-    *((int64_t*)accum+1) = 0LL;
-
-    uint8_t  defined_near_pos [max_defined_size];
-    uint8_t  defined_near_cand[max_defined_size];
-
-    int compared_count = collect_defined_in_both_areas(data, confidence_map,
-            position, candidate,
-            comp_patch_radius,
-            defined_near_pos, defined_near_cand,
-            defined_only_near_pos, confidence_sum);
-
-    if (compared_count) {
-        int sum = defined_only_near_pos*max_diff;
-
-        uint8_t* def_n_p = defined_near_pos;
-        uint8_t* def_n_c = defined_near_cand;
-
-        for (int i=0; i<compared_count; ++i) {
-            for (int j=0; j<4; ++j)
-                accum[j] += (int(def_n_p[j]) - int(def_n_c[j]));
-            def_n_p += 4;
-            def_n_c += 4;
-        }
-
-        for(int j=0; j<4; ++j) {
-            accum[j] /= compared_count;
-            if (accum[j] < -max_adjustment)
-                accum[j] = -max_adjustment;
-
-            if (accum[j] > max_adjustment)
-                accum[j] = max_adjustment;
-        }
-
-        if (equal_adjustment) {
-            int color_diff_sum = 0;
-            for(int j=0; j<4; ++j)
-                color_diff_sum += accum[j];
-            for(int j=0; j<4; ++j)
-                accum[j] = color_diff_sum/input_bytes;
-        }
-
-        def_n_p = defined_near_pos;
-        def_n_c = defined_near_cand;
-        for (int i=0; i<compared_count; ++i) {
-            for (int j=0; j<4; ++j) {
-                int c = int(def_n_c[j]) + accum[j];
-                // do not allow color clipping
-                if (c < 0 || c > 255)
-                    return best+1;
-                sum += pixel_diff(c, def_n_p[j]);
-            }
-            def_n_p += 4;
-            def_n_c += 4;
-        }
-
-        if (sum < best)
-           best_color_diff.assign(accum, accum+input_bytes);
-        return sum*(266 - confidence_sum/compared_count);
-    } else
-        return best;
-}
-
-static int get_difference(const Coordinates& candidate,
-                          const Coordinates& position)
-{
-    int max_defined_size = 4*(2*comp_patch_radius + 1)*(2*comp_patch_radius + 1);
-    int defined_only_near_pos;
-    int confidence_sum;
-
-    uint8_t defined_near_pos [max_defined_size];
-    uint8_t defined_near_cand[max_defined_size];
-
-    int compared_count = collect_defined_in_both_areas(data, confidence_map,
-            position, candidate,
-            comp_patch_radius,
-            defined_near_pos, defined_near_cand,
-            defined_only_near_pos, confidence_sum);
-
-    if (compared_count) {
-        int sum = defined_only_near_pos*max_diff;
-
-        uint8_t* def_n_p = defined_near_pos;
-        uint8_t* def_n_c = defined_near_cand;
-        for (int i=0; i<compared_count; ++i) {
-            for (int j=0; j<4; ++j) {
-                sum += pixel_diff(def_n_c[j], def_n_p[j]);
-            }
-
-            def_n_p += 4;
-            def_n_c += 4;
-        }
-
-        return sum*(266 - confidence_sum/compared_count);
-    } else
-        return best;
-}
-
 static inline bool try_point(const Coordinates& candidate,
                              const Coordinates& position,
                              int& best,
@@ -318,9 +191,14 @@ static inline bool try_point(const Coordinates& candidate,
 #endif
     int difference;
     if (max_adjustment)
-        difference = get_difference_color_adjustment(candidate, position, best_color_diff);
+        difference = get_difference_color_adjustment(data,
+            confidence_map, comp_patch_radius,
+            candidate, position, best_color_diff, best,
+            input_bytes, max_adjustment, equal_adjustment);
     else
-        difference = get_difference(candidate, position);
+        difference = get_difference(data,
+            confidence_map, comp_patch_radius,
+            candidate, position, best);
 
 #ifndef NDEBUG
     fprintf(logfile, "%s end\n", __func__);
@@ -624,7 +502,9 @@ static void run(const gchar*,
             try_point(cand, position, best, best_point, best_color_diff);
 
             START_TIMER
-            transfer_patch(position, best_point, best);
+            transfer_patch(data, input_bytes,
+                    confidence_map, transfer_map, transfer_belief,
+                    position, best_point, best, best_color_diff);
             STOP_TIMER("transfer_patch")
         }
 
@@ -665,7 +545,9 @@ static void run(const gchar*,
                                     if (clip(data, near_neighbour_src) &&
                                         try_point(near_neighbour_src, position, best, best_point, best_color_diff))
                                     {
-                                        transfer_patch(position, best_point, best);
+                                        transfer_patch(data, input_bytes,
+                                                confidence_map, transfer_map, transfer_belief,
+                                                position, best_point, best, best_color_diff);
                                         converged = false;
                                     }
                                 }
@@ -685,7 +567,9 @@ static void run(const gchar*,
                         if (try_point(near_src - offset,
                             position, best, best_point, best_color_diff))
                         {
-                            transfer_patch(position, best_point, best);
+                            transfer_patch(data, input_bytes,
+                                    confidence_map, transfer_map, transfer_belief,
+                                    position, best_point, best, best_color_diff);
                             converged = false;
                         }
                     }
@@ -755,7 +639,9 @@ static void run(const gchar*,
                                 if (clip(data, near_neighbour_src) &&
                                     try_point(near_neighbour_src, position, best, best_point, best_color_diff))
                                 {
-                                    transfer_patch(position, best_point, best);
+                                    transfer_patch(data, input_bytes,
+                                            confidence_map, transfer_map, transfer_belief,
+                                            position, best_point, best, best_color_diff);
                                     converged = false;
                                 }
                             }
@@ -775,7 +661,9 @@ static void run(const gchar*,
                     if (try_point(near_src - offset,
                         position, best, best_point, best_color_diff))
                     {
-                        transfer_patch(position, best_point, best);
+                        transfer_patch(data, input_bytes,
+                                confidence_map, transfer_map, transfer_belief,
+                                position, best_point, best, best_color_diff);
                         converged = false;
                     }
                 }

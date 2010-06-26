@@ -9,7 +9,7 @@ CXXFLAGS=$(GIMP_CFLAGS) -O2 -fno-common -ffast-math -frename-registers -fomit-fr
 
 LDFLAGS=$(GIMP_LDFLAGS) -lm #-lboost_thread
 
-OBJS=resynth.o unufo_geometry.o
+OBJS=resynth.o unufo_geometry.o unufo_patch.o
 
 all: resynth
 	@echo
