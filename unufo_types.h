@@ -103,6 +103,9 @@ struct Bitmap {
 
         delete[] img;
     }
+private:
+    Bitmap(const Bitmap&);
+    Bitmap& operator=(const Bitmap&);
 };
 
 
