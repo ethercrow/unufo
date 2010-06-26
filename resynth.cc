@@ -20,32 +20,30 @@
 
 */
 
-#include <stdio.h>
-#include <unistd.h>
-#include <stdlib.h>
-#include <time.h>
+#include <algorithm>
 #include <math.h>
+#include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <time.h>
+#include <unistd.h>
+#include <utility>
+#include <vector>
+
 #include <gtk/gtk.h>
 
-#include <vector>
-#include <utility>
-#include <algorithm>
+#include "bench.h"
+#include "unufo_consts.h"
+#include "unufo_geometry.h"
+#include "unufo_gimp_comm.h"
+#include "unufo_types.h"
+#include "unufo_pixel.h"
 
 using namespace std;
-
-#include "unufo_types.h"
-#include "unufo_consts.h"
-#include "unufo_gimp_comm.h"
-#include "unufo_geometry.h"
-#include "bench.h"
+using namespace unufo;
 
 /* Helpers for the main function */
 static FILE* logfile;
-
-static int diff_table[512];
-static int* diff_table_0; // shifted so that diff_table_0[0] == diff_table[256] == 0
-static int max_diff;
 
 static int input_bytes;
 static int comp_patch_radius;
@@ -76,15 +74,6 @@ static vector<int> best_color_diff(0);
 
 static Matrix<Coordinates> transfer_map;
 static Matrix<int> transfer_belief;
-
-static void setup_metric()
-{
-    // TODO: improve patch difference metric
-    for(int i=-256;i<256;i++)
-        diff_table[256+i] = i*i;
-    diff_table_0 = diff_table + 256;
-    max_diff = diff_table[0];
-}
 
 // structural complexity of point's neighbourhood
 static int get_complexity(const Coordinates& point)
@@ -342,12 +331,11 @@ static int get_difference_color_adjustment(const Coordinates& candidate,
         def_n_c = defined_near_cand;
         for (int i=0; i<compared_count; ++i) {
             for (int j=0; j<4; ++j) {
-                int d = int(def_n_c[j]) + accum[j];
+                int c = int(def_n_c[j]) + accum[j];
                 // do not allow color clipping
-                if (d < 0 || d > 255)
+                if (c < 0 || c > 255)
                     return best+1;
-                d -= int(def_n_p[j]);
-                sum += diff_table_0[d];
+                sum += pixel_diff(c, def_n_p[j]);
             }
             def_n_p += 4;
             def_n_c += 4;
@@ -381,8 +369,7 @@ static int get_difference(const Coordinates& candidate,
         uint8_t* def_n_c = defined_near_cand;
         for (int i=0; i<compared_count; ++i) {
             for (int j=0; j<4; ++j) {
-                int d = int(def_n_c[j]) - int(def_n_p[j]);
-                sum += diff_table_0[d];
+                sum += pixel_diff(def_n_c[j], def_n_p[j]);
             }
 
             def_n_p += 4;
@@ -435,7 +422,7 @@ public:
         int tl_best = 1<<30;
         Coordinates tl_best_point;
         vector<int> tl_best_color_diff(4, 0);
-        
+
         // TODO: unify these branches, use ref_points with border
         // bonus point: this will fix the FIXME dozen lines below
         if (use_ref_layer) {
@@ -627,10 +614,6 @@ static void run(const gchar*,
         values[0].data.d_status = GIMP_PDB_EXECUTION_ERROR;
         return;
     }
-
-    /* Setup */
-
-    setup_metric();
 
     /* Do it */
 
