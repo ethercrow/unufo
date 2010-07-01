@@ -37,10 +37,10 @@ struct Parameters {
 };
 
 //Bitmap class with three dimensions (width, height, number of channels)
-template<class t>
+template<class T>
 struct Bitmap {
     int width, height, depth;
-    t *data;
+    T *data;
 
     explicit Bitmap() { 
         data = 0;
@@ -56,15 +56,15 @@ struct Bitmap {
         depth = d;
 
         delete[] data;
-        data = new t[w*h*4];
+        data = new T[w*h*4];
         memset(data, 0, w*h*4);
     }
 
-    t *at(int x,int y) const {
+    T *at(int x,int y) const {
         return data + (y*width+x)*4;
     }
 
-    t *at(const Coordinates position) const {
+    T *at(const Coordinates position) const {
         return at(position.x,position.y);
     }
 
@@ -130,10 +130,10 @@ struct Matrix {
     }
 
     T *at(int x,int y) const {
-        return data + (y*width+x)*sizeof(T);
+        return &data[y*width+x];
     }
 
-    T *at(const Coordinates position) const {
+    T *at(const Coordinates& position) const {
         return at(position.x, position.y);
     }
 
