@@ -434,6 +434,7 @@ static void run(const gchar*,
         gimp_progress_update(
             float(in_loop_pass_count)/(in_loop_pass_count + refine_pass_count)*
             (1.0-float(points_to_go)/(total_points)));
+
         purge_already_filled(data_points);
         points_to_go = data_points.size();
 
@@ -480,7 +481,7 @@ static void run(const gchar*,
                             STOP_TIMER("try_point")
                         } else {
                             auto neighbour_src_p = transfer_map.at(neighbour);
-                            if (reinterpret_cast<uint64_t*>(neighbour_src_p)) {
+                            if (*(reinterpret_cast<uint64_t*>(neighbour_src_p))) {
                                 Coordinates near_neighbour_src = *neighbour_src_p - offset;
                                 if (clip(data, near_neighbour_src))
                                     try_point(near_neighbour_src, position, best, best_point, best_color_diff);
@@ -540,7 +541,7 @@ static void run(const gchar*,
                             Coordinates neighbour = position + offset;
                             if (clip(data, neighbour) && *data_mask.at(neighbour)) {
                                 auto neighbour_src_p = transfer_map.at(neighbour);
-                                if (reinterpret_cast<uint64_t*>(neighbour_src_p)) {
+                                if (*(reinterpret_cast<uint64_t*>(neighbour_src_p))) {
                                     Coordinates near_neighbour_src = *neighbour_src_p - offset;
                                     if (clip(data, near_neighbour_src) &&
                                         try_point(near_neighbour_src, position, best, best_point, best_color_diff))
@@ -634,7 +635,7 @@ static void run(const gchar*,
                         Coordinates neighbour = position + offset;
                         if (clip(data, neighbour) && *data_mask.at(neighbour)) {
                             auto neighbour_src_p = transfer_map.at(neighbour);
-                            if (reinterpret_cast<uint64_t*>(neighbour_src_p)) {
+                            if (*(reinterpret_cast<uint64_t*>(neighbour_src_p))) {
                                 Coordinates near_neighbour_src = *neighbour_src_p - offset;
                                 if (clip(data, near_neighbour_src) &&
                                     try_point(near_neighbour_src, position, best, best_point, best_color_diff))
