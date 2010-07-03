@@ -530,30 +530,29 @@ static void run(const gchar*,
 
             for(int i=i_begin; i != i_end; i+=i_inc) {
                 Coordinates position = edge_points[i].second;
-                int best = *transfer_belief.at(position);
+                int best = 1<<30;
                 Coordinates best_point = *transfer_map.at(position);
 
                 // coherence propagation
                 for (int ox=-1; ox<=1; ++ox)
-                    for (int oy=-1; oy<=1; ++oy)
-                        if (ox || oy) {
-                            Coordinates offset(ox, oy);
-                            Coordinates neighbour = position + offset;
-                            if (clip(data, neighbour) && *data_mask.at(neighbour)) {
-                                auto neighbour_src_p = transfer_map.at(neighbour);
-                                if (*(reinterpret_cast<uint64_t*>(neighbour_src_p))) {
-                                    Coordinates near_neighbour_src = *neighbour_src_p - offset;
-                                    if (clip(data, near_neighbour_src) &&
-                                        try_point(near_neighbour_src, position, best, best_point, best_color_diff))
-                                    {
-                                        transfer_patch(data, input_bytes,
-                                                confidence_map, transfer_map, transfer_belief,
-                                                position, best_point, best, best_color_diff);
-                                        converged = false;
-                                    }
+                    for (int oy=-1; oy<=1; ++oy) {
+                        Coordinates offset(ox, oy);
+                        Coordinates neighbour = position + offset;
+                        if (clip(data, neighbour) && *data_mask.at(neighbour)) {
+                            auto neighbour_src_p = transfer_map.at(neighbour);
+                            if (*(reinterpret_cast<uint64_t*>(neighbour_src_p))) {
+                                Coordinates near_neighbour_src = *neighbour_src_p - offset;
+                                if (clip(data, near_neighbour_src) &&
+                                    try_point(near_neighbour_src, position, best, best_point, best_color_diff))
+                                {
+                                    transfer_patch(data, input_bytes,
+                                            confidence_map, transfer_map, transfer_belief,
+                                            position, best_point, best, best_color_diff);
+                                    converged = false;
                                 }
                             }
                         }
+                    }
 
                 // random search
                 int search_range = max(data.width, data.height);
@@ -624,30 +623,29 @@ static void run(const gchar*,
         bool converged = true;
         for(int i=i_begin; i != i_end; i+=i_inc) {
             Coordinates position = data_points_backup[i];
-            int best = *transfer_belief.at(position);
+            int best = 1<<30;
             Coordinates best_point = *transfer_map.at(position);
 
             // coherence propagation
             for (int ox=-1; ox<=1; ++ox)
-                for (int oy=-1; oy<=1; ++oy)
-                    if (ox || oy) {
-                        Coordinates offset(ox, oy);
-                        Coordinates neighbour = position + offset;
-                        if (clip(data, neighbour) && *data_mask.at(neighbour)) {
-                            auto neighbour_src_p = transfer_map.at(neighbour);
-                            if (*(reinterpret_cast<uint64_t*>(neighbour_src_p))) {
-                                Coordinates near_neighbour_src = *neighbour_src_p - offset;
-                                if (clip(data, near_neighbour_src) &&
-                                    try_point(near_neighbour_src, position, best, best_point, best_color_diff))
-                                {
-                                    transfer_patch(data, input_bytes,
-                                            confidence_map, transfer_map, transfer_belief,
-                                            position, best_point, best, best_color_diff);
-                                    converged = false;
-                                }
+                for (int oy=-1; oy<=1; ++oy) {
+                    Coordinates offset(ox, oy);
+                    Coordinates neighbour = position + offset;
+                    if (clip(data, neighbour) && *data_mask.at(neighbour)) {
+                        auto neighbour_src_p = transfer_map.at(neighbour);
+                        if (*(reinterpret_cast<uint64_t*>(neighbour_src_p))) {
+                            Coordinates near_neighbour_src = *neighbour_src_p - offset;
+                            if (clip(data, near_neighbour_src) &&
+                                try_point(near_neighbour_src, position, best, best_point, best_color_diff))
+                            {
+                                transfer_patch(data, input_bytes,
+                                        confidence_map, transfer_map, transfer_belief,
+                                        position, best_point, best, best_color_diff);
+                                converged = false;
                             }
                         }
                     }
+                }
 
             // random search
             int search_range = max(data.width, data.height);
