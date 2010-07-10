@@ -21,6 +21,7 @@
 */
 
 #include <algorithm>
+#include <limits.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -222,7 +223,7 @@ public:
     fflush(logfile);
 #endif
         // thread local vars
-        int tl_best{1<<30};
+        int tl_best{INT_MAX};
         Coordinates tl_best_point;
         vector<int> tl_best_color_diff{0, 0, 0, 0};
 
@@ -457,13 +458,13 @@ static void run(const gchar*,
         for(int i=0; i < edge_points_size; ++i) {
             Coordinates position = edge_points[i].second;
 
-            best = 1<<30;
+            best = INT_MAX;
             best_color_diff.assign(input_bytes, 0);
 
             ///////////////////////////
             // Neighbour search BEGIN
             ///////////////////////////
-            
+
             clock_gettime(CLOCK_REALTIME, &perf_tmp);
             perf_neighbour_search -= perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
 
@@ -530,7 +531,7 @@ static void run(const gchar*,
 
             for(int i=i_begin; i != i_end; i+=i_inc) {
                 Coordinates position = edge_points[i].second;
-                int best = 1<<30;
+                int best = INT_MAX;
                 Coordinates best_point = *transfer_map.at(position);
 
                 // coherence propagation
@@ -623,7 +624,7 @@ static void run(const gchar*,
         bool converged = true;
         for(int i=i_begin; i != i_end; i+=i_inc) {
             Coordinates position = data_points_backup[i];
-            int best = 1<<30;
+            int best = INT_MAX;
             Coordinates best_point = *transfer_map.at(position);
 
             // coherence propagation

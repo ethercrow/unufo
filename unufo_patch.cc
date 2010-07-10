@@ -89,7 +89,7 @@ int get_difference_color_adjustment(const Bitmap<uint8_t>& data,
             int c = int(def_n_c[j]) + accum[j];
             // do not allow color clipping
             if (c < 0 || c > 255)
-                return best+1;
+                return best;
             sum += pixel_diff(c, def_n_p[j]);
         }
         def_n_p += 4;
