@@ -36,7 +36,6 @@ int get_difference_color_adjustment(const Bitmap<uint8_t>& data,
 {
     int max_defined_size = 4*(2*comp_patch_radius + 1)*(2*comp_patch_radius + 1);
     int defined_only_near_pos;
-    int confidence_sum;
 
     int accum[4] = {0, 0, 0, 0};
 
@@ -48,7 +47,7 @@ int get_difference_color_adjustment(const Bitmap<uint8_t>& data,
             position, candidate,
             comp_patch_radius,
             defined_near_pos, defined_near_cand,
-            defined_only_near_pos, confidence_sum);
+            defined_only_near_pos);
 
     if (!compared_count)
         return best;
@@ -98,7 +97,7 @@ int get_difference_color_adjustment(const Bitmap<uint8_t>& data,
 
     if (sum < best)
        best_color_diff.assign(accum, accum+bpp);
-    return sum*(266 - confidence_sum/compared_count);
+    return sum;
 }
 
 int get_difference(const Bitmap<uint8_t>& data,
@@ -110,7 +109,6 @@ int get_difference(const Bitmap<uint8_t>& data,
 {
     int max_defined_size = 4*(2*comp_patch_radius + 1)*(2*comp_patch_radius + 1);
     int defined_only_near_pos;
-    int confidence_sum;
 
     uint8_t defined_near_pos [max_defined_size];
     uint8_t defined_near_cand[max_defined_size];
@@ -120,7 +118,7 @@ int get_difference(const Bitmap<uint8_t>& data,
             position, candidate,
             comp_patch_radius,
             defined_near_pos, defined_near_cand,
-            defined_only_near_pos, confidence_sum);
+            defined_only_near_pos);
 
     if (compared_count) {
         int sum = defined_only_near_pos*max_diff;
@@ -136,7 +134,7 @@ int get_difference(const Bitmap<uint8_t>& data,
             def_n_c += 4;
         }
 
-        return sum*(266 - confidence_sum/compared_count);
+        return sum;
     } else
         return best;
 }
