@@ -26,5 +26,10 @@ int get_difference(const Bitmap<uint8_t>& data,
         const Coordinates& candidate,
         const Coordinates& position, int best);
 
+/// return structural complexity of point's neighbourhood
+int get_complexity(const Bitmap<uint8_t>& data,
+        const Bitmap<uint8_t>& confidence_map,
+        const Coordinates& point, int comp_patch_radius, int bpp);
+
 }
 

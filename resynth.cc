@@ -77,68 +77,6 @@ static vector<int> best_color_diff(0);
 static Matrix<Coordinates> transfer_map;
 static Matrix<int> transfer_belief;
 
-// structural complexity of point's neighbourhood
-static int get_complexity(const Coordinates& point)
-{
-#ifndef NDEBUG
-    fprintf(logfile, "%s begin\n", __func__);
-    fflush(logfile);
-#endif
-    // TODO: improve complexity metric
-    int confidence_sum = 0;
-    int defined_count = 0;
-
-    // get mean color
-    Coordinates defined_points[comp_patch_radius*comp_patch_radius*4 + comp_patch_radius*4 + 1];
-    for (int ox=-comp_patch_radius; ox<=comp_patch_radius; ++ox)
-        for (int oy=-comp_patch_radius; oy<=comp_patch_radius; ++oy) {
-            Coordinates point_off = point + Coordinates(ox, oy);
-            if (clip(data, point_off) && *confidence_map.at(point_off)) {
-                confidence_sum += *confidence_map.at(point_off);
-                defined_points[defined_count++] = point_off;
-            }
-        }
-
-    if (!defined_count) {
-#ifndef NDEBUG
-        fprintf(logfile, "%s end\n", __func__);
-        fflush(logfile);
-#endif
-        return -1;
-    }
-
-    int mean_values[input_bytes];
-    for (int j = 0; j<input_bytes; ++j)
-        mean_values[j] = 0;
-    for (int i = 0; i<defined_count; ++i) {
-        uint8_t* colors = data.at(defined_points[i]);
-        for (int j = 0; j<input_bytes; ++j)
-            mean_values[j] = colors[j];
-    }
-
-    // compute local deviation
-    // spatial weight function is 1/(1+sqared_distance_from_point)
-    int weighted_dev;
-    for (int ox=-comp_patch_radius; ox<=comp_patch_radius; ++ox)
-        for (int oy=-comp_patch_radius; oy<=comp_patch_radius; ++oy) {
-            Coordinates point_off = point + Coordinates(ox, oy);
-            if (clip(data, point_off) && *confidence_map.at(point_off))
-                for (int j = 0; j<input_bytes; ++j) {
-                    int d = (data.at(point_off)[j] - mean_values[j]);
-                    weighted_dev += d*d/(1+ox*ox+oy*oy);
-                }
-        }
-
-    // multiply by average confidence among defined points
-    weighted_dev *= (confidence_sum/defined_count);
-
-#ifndef NDEBUG
-    fprintf(logfile, "%s end\n", __func__);
-    fflush(logfile);
-#endif
-    return weighted_dev;
-}
-
 struct already_filled_pred
 {
     bool operator()(const Coordinates& position) {
@@ -164,7 +102,7 @@ void get_edge_points(const vector<Coordinates>& data_points, vector<pair<int, Co
                     island_flag = false;
         if (!island_flag) {
             START_TIMER
-            int complexity = get_complexity(data_points[i]);
+            int complexity = get_complexity(data, confidence_map, data_points[i], comp_patch_radius, input_bytes);
             STOP_TIMER("get_complexity")
             edge_points.push_back(std::make_pair(complexity, data_points[i]));
         }

@@ -139,5 +139,57 @@ int get_difference(const Bitmap<uint8_t>& data,
         return best;
 }
 
+int get_complexity(const Bitmap<uint8_t>& data,
+        const Bitmap<uint8_t>& confidence_map,
+        const Coordinates& point, int comp_patch_radius,
+        int bpp)
+{
+    // TODO: improve complexity metric
+    int confidence_sum = 0;
+    int defined_count = 0;
+
+    // get mean color
+    Coordinates defined_points[comp_patch_radius*comp_patch_radius*4 + comp_patch_radius*4 + 1];
+    for (int ox=-comp_patch_radius; ox<=comp_patch_radius; ++ox)
+        for (int oy=-comp_patch_radius; oy<=comp_patch_radius; ++oy) {
+            Coordinates point_off = point + Coordinates(ox, oy);
+            if (clip(data, point_off) && *confidence_map.at(point_off)) {
+                confidence_sum += *confidence_map.at(point_off);
+                defined_points[defined_count++] = point_off;
+            }
+        }
+
+    if (!defined_count) {
+        return -1;
+    }
+
+    int mean_values[bpp];
+    for (int j = 0; j<bpp; ++j)
+        mean_values[j] = 0;
+    for (int i = 0; i<defined_count; ++i) {
+        uint8_t* colors = data.at(defined_points[i]);
+        for (int j = 0; j<bpp; ++j)
+            mean_values[j] = colors[j];
+    }
+
+    // compute local deviation
+    // spatial weight function is 1/(1+sqared_distance_from_point)
+    int weighted_dev;
+    for (int ox=-comp_patch_radius; ox<=comp_patch_radius; ++ox)
+        for (int oy=-comp_patch_radius; oy<=comp_patch_radius; ++oy) {
+            Coordinates point_off = point + Coordinates(ox, oy);
+            if (clip(data, point_off) && *confidence_map.at(point_off))
+                for (int j = 0; j<bpp; ++j) {
+                    int d = (data.at(point_off)[j] - mean_values[j]);
+                    weighted_dev += d*d/(1+ox*ox+oy*oy);
+                }
+        }
+
+    // multiply by average confidence among defined points
+    weighted_dev *= (confidence_sum/defined_count);
+
+    return weighted_dev;
+}
+
 }
 
