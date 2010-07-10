@@ -19,7 +19,7 @@ void transfer_patch(const Bitmap<uint8_t>& data, int bpp,
         data.at(position)[j] = new_color;
     }
     // TODO: better confidence transfer
-    *confidence_map.at(position) = max(10, *confidence_map.at(source) - 5); 
+    *confidence_map.at(position) = *confidence_map.at(source);
     *transfer_map.at(position) = source;
     *transfer_belief.at(position) = belief;
 }

@@ -80,7 +80,7 @@ static Matrix<int> transfer_belief;
 struct already_filled_pred
 {
     bool operator()(const Coordinates& position) {
-        return *confidence_map.at(position);
+        return *transfer_belief.at(position) >= 0;
     }
 };
 
@@ -303,13 +303,16 @@ static void run(const gchar*,
 
     for(int y=0;y<confidence_map.height;y++)
         for(int x=0;x<confidence_map.width;x++) {
-            *confidence_map.at(x,y) = 0;
-
-            if (!data_mask.at(x,y)[0])
+            if (!data_mask.at(x,y)[0]) {
+                // ground truth
                 *confidence_map.at(x,y) = 255;
-
-            if (data_mask.at(x,y)[0])
+                *transfer_belief.at(x,y) = 0;
+            } else {
+                // point to fill
+                *confidence_map.at(x,y) = 0;
+                *transfer_belief.at(x,y) = -1;
                 data_points.push_back(Coordinates(x,y));
+            }
         }
 
     /* Fetch the ref_layer */
