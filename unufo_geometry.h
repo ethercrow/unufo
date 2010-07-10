@@ -5,7 +5,7 @@
 
 namespace unufo {
 
-inline bool clip(Bitmap<uint8_t> &image, const Coordinates& point)
+inline bool clip(const Bitmap<uint8_t>& image, const Coordinates& point)
 {
     if (point.x < 0 ||
         point.y < 0 ||
