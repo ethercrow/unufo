@@ -13,6 +13,7 @@ void transfer_patch(const Bitmap<uint8_t>& data, int bpp,
 
 int get_difference_color_adjustment(const Bitmap<uint8_t>& data,
         const Bitmap<uint8_t>& confidence_map,
+        const Matrix<int>& transfer_belief,
         int comp_patch_radius,
         const Coordinates& candidate,
         const Coordinates& position,
@@ -22,6 +23,7 @@ int get_difference_color_adjustment(const Bitmap<uint8_t>& data,
 
 int get_difference(const Bitmap<uint8_t>& data,
         const Bitmap<uint8_t>& confidence_map,
+        const Matrix<int>& transfer_belief,
         int comp_patch_radius,
         const Coordinates& candidate,
         const Coordinates& position, int best);
@@ -29,6 +31,7 @@ int get_difference(const Bitmap<uint8_t>& data,
 /// return structural complexity of point's neighbourhood
 int get_complexity(const Bitmap<uint8_t>& data,
         const Bitmap<uint8_t>& confidence_map,
+        const Matrix<int>& transfer_belief,
         const Coordinates& point, int comp_patch_radius, int bpp);
 
 }

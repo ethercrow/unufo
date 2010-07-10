@@ -102,7 +102,8 @@ void get_edge_points(const vector<Coordinates>& data_points, vector<pair<int, Co
                     island_flag = false;
         if (!island_flag) {
             START_TIMER
-            int complexity = get_complexity(data, confidence_map, data_points[i], comp_patch_radius, input_bytes);
+            int complexity = get_complexity(data, confidence_map, transfer_belief,
+                    data_points[i], comp_patch_radius, input_bytes);
             STOP_TIMER("get_complexity")
             edge_points.push_back(std::make_pair(complexity, data_points[i]));
         }
@@ -131,12 +132,12 @@ static inline bool try_point(const Coordinates& candidate,
     int difference;
     if (max_adjustment)
         difference = get_difference_color_adjustment(data,
-            confidence_map, comp_patch_radius,
+            confidence_map, transfer_belief, comp_patch_radius,
             candidate, position, best_color_diff, best,
             input_bytes, max_adjustment, equal_adjustment);
     else
         difference = get_difference(data,
-            confidence_map, comp_patch_radius,
+            confidence_map, transfer_belief, comp_patch_radius,
             candidate, position, best);
 
 #ifndef NDEBUG
