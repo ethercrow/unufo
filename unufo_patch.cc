@@ -39,8 +39,6 @@ int get_difference_color_adjustment(const Bitmap<uint8_t>& data,
     int confidence_sum;
 
     int accum[4] = {0, 0, 0, 0};
-    // *((int64_t*)accum) = 0LL;
-    // *((int64_t*)accum+1) = 0LL;
 
     uint8_t defined_near_pos [max_defined_size];
     uint8_t defined_near_cand[max_defined_size];
