@@ -132,12 +132,12 @@ static inline bool try_point(const Coordinates& candidate,
     int difference;
     if (max_adjustment)
         difference = get_difference_color_adjustment(data,
-            confidence_map, transfer_belief, comp_patch_radius,
+            transfer_belief, comp_patch_radius,
             candidate, position, best_color_diff, best,
             input_bytes, max_adjustment, equal_adjustment);
     else
         difference = get_difference(data,
-            confidence_map, transfer_belief, comp_patch_radius,
+            transfer_belief, comp_patch_radius,
             candidate, position, best);
 
 #ifndef NDEBUG

@@ -16,7 +16,6 @@ inline bool clip(const Bitmap<uint8_t>& image, const Coordinates& point)
 }
 
 int collect_defined_in_both_areas(const Bitmap<uint8_t>& data,
-        const Bitmap<uint8_t>& confidence_map,
         const Matrix<int>& transfer_belief,
         const Coordinates& position, const Coordinates& candidate,
         int area_size,

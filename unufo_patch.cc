@@ -25,7 +25,6 @@ void transfer_patch(const Bitmap<uint8_t>& data, int bpp,
 }
 
 int get_difference_color_adjustment(const Bitmap<uint8_t>& data,
-        const Bitmap<uint8_t>& confidence_map,
         const Matrix<int>& transfer_belief,
         int comp_patch_radius,
         const Coordinates& candidate,
@@ -43,7 +42,7 @@ int get_difference_color_adjustment(const Bitmap<uint8_t>& data,
     uint8_t defined_near_cand[max_defined_size];
 
     int compared_count = collect_defined_in_both_areas(data,
-            confidence_map, transfer_belief,
+            transfer_belief,
             position, candidate,
             comp_patch_radius,
             defined_near_pos, defined_near_cand,
@@ -101,7 +100,6 @@ int get_difference_color_adjustment(const Bitmap<uint8_t>& data,
 }
 
 int get_difference(const Bitmap<uint8_t>& data,
-        const Bitmap<uint8_t>& confidence_map,
         const Matrix<int>& transfer_belief,
         int comp_patch_radius,
         const Coordinates& candidate,
@@ -114,7 +112,7 @@ int get_difference(const Bitmap<uint8_t>& data,
     uint8_t defined_near_cand[max_defined_size];
 
     int compared_count = collect_defined_in_both_areas(data,
-            confidence_map, transfer_belief,
+            transfer_belief,
             position, candidate,
             comp_patch_radius,
             defined_near_pos, defined_near_cand,
@@ -125,7 +123,7 @@ int get_difference(const Bitmap<uint8_t>& data,
 
         uint8_t* def_n_p = defined_near_pos;
         uint8_t* def_n_c = defined_near_cand;
-        for (int i=0; i<compared_count; ++i) {
+        for (; compared_count; --compared_count) {
             for (int j=0; j<4; ++j) {
                 sum += pixel_diff(def_n_c[j], def_n_p[j]);
             }
