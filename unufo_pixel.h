@@ -8,7 +8,7 @@ inline int pixel_diff(const uint8_t p1, const uint8_t p2)
     return result*result;
 }
 
-const int max_diff = 255*255;
+const int max_diff = 256*256;
 
 }
 
