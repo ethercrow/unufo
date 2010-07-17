@@ -152,7 +152,7 @@ int get_complexity(const Bitmap<uint8_t>& data,
     for (int ox=-comp_patch_radius; ox<=comp_patch_radius; ++ox)
         for (int oy=-comp_patch_radius; oy<=comp_patch_radius; ++oy) {
             Coordinates point_off = point + Coordinates(ox, oy);
-            if (clip(data, point_off) && *confidence_map.at(point_off)) {
+            if (clip(data, point_off) && *transfer_belief.at(point_off)>=0) {
                 confidence_sum += *confidence_map.at(point_off);
                 defined_points[defined_count++] = point_off;
             }
