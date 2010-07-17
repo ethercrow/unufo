@@ -12,6 +12,9 @@
 #define _(msgid)    gettext (msgid)
 #endif
 
+const int WORK_LAYER_PARAM_ID = 2;
+const int REF_LAYER_PARAM_ID = 11;
+
 //Get a drawable and possibly its selection mask from the GIMP
 void fetch_image_and_mask(GimpDrawable *drawable, Bitmap<uint8_t> &image, int bytes, 
         Bitmap<uint8_t> &mask, uint8_t default_mask_value,
@@ -63,18 +66,17 @@ void fetch_image_and_mask(GimpDrawable *drawable, Bitmap<uint8_t> &image, int by
 /* Convert argument list into parameters */
 static bool get_parameters_from_list(Parameters *param, int n_args, const GimpParam *args)
 {
-    if (n_args != 20)
+    if (n_args != 12)
         return false;
 
-    param->corpus_id        = args[6].data.d_int32;
-    param->neighbours       = args[11].data.d_int32;
-    param->tries            = args[12].data.d_int32;
-    param->comp_size        = args[13].data.d_int32;
-    param->transfer_size    = args[14].data.d_int32;
-    param->invent_gradients = args[15].data.d_int32;
-    param->max_adjustment   = args[16].data.d_int32;
-    param->equal_adjustment = args[17].data.d_int32;
-    param->use_ref_layer    = args[18].data.d_int32;
+    param->corpus_id        = args[3].data.d_int32;
+    param->tries            = args[4].data.d_int32;
+    param->comp_size        = args[5].data.d_int32;
+    param->transfer_size    = args[6].data.d_int32;
+    param->invent_gradients = args[7].data.d_int32;
+    param->max_adjustment   = args[8].data.d_int32;
+    param->equal_adjustment = args[9].data.d_int32;
+    param->use_ref_layer    = args[10].data.d_int32;
 
     return true;
 }
@@ -87,17 +89,6 @@ static void run(const gchar *name,
     gint *nreturn_vals,
     GimpParam **return_vals);
 
-static void query();
-static GimpPlugInInfo PLUG_IN_INFO = {
-    NULL, /* init_proc */
-    NULL, /* quit_proc */
-    query, /* query_proc */
-    run, /* run_proc */
-};
-
-/* Macro to define the usual plugin main function */
-MAIN()
-
 /* Add capabilities of this plugin to Procedural DataBase */
 static void query()
 {
@@ -106,15 +97,15 @@ static void query()
         { GIMP_PDB_IMAGE, "image", "Input image" },
         { GIMP_PDB_DRAWABLE, "drawable", "Input drawable" },
 
-        { GIMP_PDB_INT32, "vtile", "Make tilable vertically" },
-        { GIMP_PDB_INT32, "htile", "Make tilable horizontally" },
-        { GIMP_PDB_INT32, "noborder", "Dont change border pixels" },
+        // { GIMP_PDB_INT32, "vtile", "Make tilable vertically" },
+        // { GIMP_PDB_INT32, "htile", "Make tilable horizontally" },
+        // { GIMP_PDB_INT32, "noborder", "Dont change border pixels" },
         { GIMP_PDB_INT32, "corpus", "Layer to use as corpus" },
-        { GIMP_PDB_INT32, "inmask", "Layer to use as input mask, -1 for none" },
-        { GIMP_PDB_INT32, "outmask", "Layer to use as output mask, -1 for none" },
-        { GIMP_PDB_FLOAT, "map_weight", "Weight to give to map, if map is used" },
-        { GIMP_PDB_FLOAT, "autism", "Sensitivity to outliers" },
-        { GIMP_PDB_INT32, "neighbourhood", "Neighbourhood size" },
+        // { GIMP_PDB_INT32, "inmask", "Layer to use as input mask, -1 for none" },
+        // { GIMP_PDB_INT32, "outmask", "Layer to use as output mask, -1 for none" },
+        // { GIMP_PDB_FLOAT, "map_weight", "Weight to give to map, if map is used" },
+        // { GIMP_PDB_FLOAT, "autism", "Sensitivity to outliers" },
+        // { GIMP_PDB_INT32, "neighbourhood", "Neighbourhood size" },
         { GIMP_PDB_INT32, "tries", "Search thoroughness" },
         { GIMP_PDB_INT32, "comp_size", "Patches of this size are compared" },
         { GIMP_PDB_INT32, "transfer_size", "Size of transfer unit" },
@@ -144,6 +135,13 @@ static void query()
         nargs, nreturn_vals,
         args, return_vals);
 }
+
+static GimpPlugInInfo PLUG_IN_INFO = {
+    NULL, /* init_proc */
+    NULL, /* quit_proc */
+    query, /* query_proc */
+    run, /* run_proc */
+};
 
 #endif //ESYNTH_GIMP_COMM_H
 

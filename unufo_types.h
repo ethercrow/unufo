@@ -5,7 +5,8 @@
 #include <libgimp/gimpui.h>
 #include <inttypes.h>
 
-typedef struct Coordinates {
+typedef struct Coordinates
+{
     int x, y;
     Coordinates(int _x,int _y): x(_x), y(_y) { }
     Coordinates(): x(0), y(0) { }
@@ -23,13 +24,13 @@ typedef struct Coordinates {
     }
 } Coordinates;
 
-struct Parameters {
+struct Parameters
+{
     bool invent_gradients;
     bool equal_adjustment;
     bool use_ref_layer;
 
     gint32 corpus_id;
-    gint32 ref_layer_id;
 
     gint32 neighbours, tries;
     gint32 comp_size, transfer_size;
@@ -38,7 +39,8 @@ struct Parameters {
 
 //Bitmap class with three dimensions (width, height, number of channels)
 template<class T>
-struct Bitmap {
+struct Bitmap
+{
     int width, height, depth;
     T *data;
 
@@ -110,7 +112,8 @@ private:
 
 
 template<class T>
-struct Matrix {
+struct Matrix
+{
     int width, height;
     T *data;
 

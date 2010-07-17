@@ -34,12 +34,6 @@ Options:
 
         Quality/Performance impact: obviously, you should set this so that source region is relevant to the desired content in destination region. Performance impact is negligible.
         
-    * How many neighbour patches to consider as a source
-        
-        How many neighbour patches should be considered as a source, in addition to the global search in the source region
-
-        Q/P impact: Neighbour search, along with global search, is the most time-consuming part of the plugin. Time scales nearly linearly with this parameter. The best value varies from picture to picture and should be pretty obvious to You, the proud human.
-
     * How many randomly chosen patches to consider as a source
         
        The same as the previous option, but for the global search in source region. The best value for this parameter, however, is much less obvious and depends on the source region texture, quality requirements and the phase of the moon.

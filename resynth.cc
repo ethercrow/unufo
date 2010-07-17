@@ -44,6 +44,9 @@
 using namespace std;
 using namespace unufo;
 
+/* Macro to define the usual plugin main function */
+MAIN()
+
 /* Helpers for the main function */
 static FILE* logfile;
 
@@ -217,7 +220,6 @@ static void run(const gchar*,
 
     logfile = fopen(LOG_FILE, "wt");
     int64_t perf_overall          = 0;
-    int64_t perf_neighbour_search = 0;
     int64_t perf_random_search    = 0;
     int64_t perf_refinement       = 0;
 
@@ -250,7 +252,7 @@ static void run(const gchar*,
     }
 
     /* Get drawable */
-    drawable = gimp_drawable_get(param[2].data.d_drawable);
+    drawable = gimp_drawable_get(param[WORK_LAYER_PARAM_ID].data.d_drawable);
 
     if (!gimp_drawable_is_rgb(drawable->drawable_id) &&
             !gimp_drawable_is_gray(drawable->drawable_id)) {
@@ -272,7 +274,7 @@ static void run(const gchar*,
     use_ref_layer = parameters.use_ref_layer;
 
     if (use_ref_layer) {
-        ref_drawable = gimp_drawable_get(param[19].data.d_drawable);
+        ref_drawable = gimp_drawable_get(param[REF_LAYER_PARAM_ID].data.d_drawable);
         if (ref_drawable->bpp != drawable->bpp) {
             gimp_message(_("Working layer and reference layer must have the same color depth"));
             gimp_drawable_detach(drawable);
@@ -402,44 +404,6 @@ static void run(const gchar*,
 
             best = INT_MAX;
             best_color_diff.assign(input_bytes, 0);
-
-            ///////////////////////////
-            // Neighbour search BEGIN
-            ///////////////////////////
-
-            clock_gettime(CLOCK_REALTIME, &perf_tmp);
-            perf_neighbour_search -= perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
-
-            int neighbour_area_size = sqrt(parameters.neighbours)/2;
-
-            int n_neighbours = 0;
-            for (int oy = -neighbour_area_size; oy<=neighbour_area_size; ++oy)
-                for (int ox = -neighbour_area_size; ox<=neighbour_area_size; ++ox) {
-                    Coordinates offset = Coordinates(ox, oy);
-                    Coordinates neighbour = position + offset;
-                    if (clip(data, neighbour)) {
-                        if (!*data_mask.at(neighbour)) {
-                            START_TIMER
-                            try_point(neighbour, position, best, best_point, best_color_diff);
-                            STOP_TIMER("try_point")
-                        } else {
-                            auto neighbour_src_p = transfer_map.at(neighbour);
-                            if (*(reinterpret_cast<uint64_t*>(neighbour_src_p))) {
-                                Coordinates near_neighbour_src = *neighbour_src_p - offset;
-                                if (clip(data, near_neighbour_src))
-                                    try_point(near_neighbour_src, position, best, best_point, best_color_diff);
-                            }
-                        }
-                        if (++n_neighbours >= parameters.neighbours) break;
-                    }
-                }
-
-            clock_gettime(CLOCK_REALTIME, &perf_tmp);
-            perf_neighbour_search += perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
-
-            ///////////////////////////
-            // Neighbour search END
-            ///////////////////////////
 
             refine_callable refiner(parameters.tries, position);
             Coordinates cand = refiner();
@@ -619,7 +583,6 @@ static void run(const gchar*,
 
     fprintf(logfile, "\n%d points left unfilled\n", points_to_go);
     fprintf(logfile, "populating edge_points took %lld usec\n", perf_edge_points/1000);
-    fprintf(logfile, "neighbour search took %lld usec\n", perf_neighbour_search/1000);
     fprintf(logfile, "random search took %lld usec\n", perf_random_search/1000);
     fprintf(logfile, "refinement took %lld usec\n", perf_refinement/1000);
     fprintf(logfile, "early converge count: %d\n", converge_count);
@@ -630,7 +593,7 @@ static void run(const gchar*,
     /* Write result back to the GIMP, clean up */
 
     /* Write result to region */
-    data.to_drawable(drawable, 0,0, 0);
+    data.to_drawable(drawable, 0, 0, 0);
 
     /* Voodoo to update actual image */
     gimp_drawable_flush(drawable);
@@ -642,3 +605,4 @@ static void run(const gchar*,
 
     gimp_displays_flush();
 }
+

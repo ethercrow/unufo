@@ -28,7 +28,7 @@
 ; lkk comment: creates stencil selection in a temp dupe image to pass as source drawable to plugin
 
 
-(define (script-fu-smart-remove img layer corpus-border neighbour-count random-tries-count
+(define (script-fu-smart-remove img layer corpus-border random-tries-count
          comp-size transfer-size invent-gradients max-adjust equal-adjust use-ref-layer ref-layer-id)
   (cond
     ((= 0 (car (gimp-selection-bounds img))) 
@@ -95,15 +95,7 @@
         1
         img
         layer
-        0
-        0
-        1
         workLayerID
-        -1
-        -1
-        0.0
-        0.117
-        neighbour-count           ; neighbour count
         random-tries-count        ; number of additional tries
         comp-size
         transfer-size
@@ -129,7 +121,6 @@ Requires separate resynthesizer plug-in."
 		    SF-IMAGE "Input Image" 0
 		    SF-DRAWABLE "Input Layer" 0
 		    SF-ADJUSTMENT "Radius to take texture from" '(50 7 2000 1.0 1.0 0 1)
-		    SF-ADJUSTMENT "How many neighbour patches to consider as a source" '(25 8 40000 10.0 100.0 0 1)
 		    SF-ADJUSTMENT "Random search thoroughness" '(20 1 40000 10.0 100.0 0 1)
 		    SF-ADJUSTMENT "Patch size (larger = slower)" '(3 1 50 1.0 2.0 0 1)
 		    SF-ADJUSTMENT "Transfer unit size (smaller = slower, but possibly less artifacts)" '(2 0 30 1.0 2.0 0 1)
