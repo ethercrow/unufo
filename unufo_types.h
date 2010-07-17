@@ -10,16 +10,16 @@ typedef struct Coordinates {
     Coordinates(int _x,int _y): x(_x), y(_y) { }
     Coordinates(): x(0), y(0) { }
 
-    bool operator< (const Coordinates& other) const { 
-        return y*y+x*x < (other.y*other.y+other.x*other.x); 
+    bool operator< (const Coordinates& other) const {
+        return y*y+x*x < (other.y*other.y+other.x*other.x);
     }
 
-    Coordinates operator+ (const Coordinates& a) const { 
-        return Coordinates(x+a.x,y+a.y); 
+    Coordinates operator+ (const Coordinates& a) const {
+        return Coordinates(x+a.x,y+a.y);
     }
 
-    Coordinates operator- (const Coordinates& a) const { 
-        return Coordinates(x-a.x,y-a.y); 
+    Coordinates operator- (const Coordinates& a) const {
+        return Coordinates(x-a.x,y-a.y);
     }
 } Coordinates;
 
@@ -42,7 +42,7 @@ struct Bitmap {
     int width, height, depth;
     T *data;
 
-    explicit Bitmap() { 
+    explicit Bitmap() {
         data = 0;
     }
 
@@ -51,8 +51,8 @@ struct Bitmap {
     }
 
     void resize(int w,int h,int d) {
-        width = w; 
-        height = h; 
+        width = w;
+        height = h;
         depth = d;
 
         delete[] data;
@@ -121,8 +121,8 @@ struct Matrix {
     }
 
     void resize(int w, int h) {
-        width = w; 
-        height = h; 
+        width = w;
+        height = h;
 
         delete[] data;
         data = new T[w*h*sizeof(T)];
