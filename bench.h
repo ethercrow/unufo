@@ -5,7 +5,7 @@
 static inline uint64_t read_time(void)
 {
     if(sizeof(long)==8)
-    {   
+    {
         uint64_t a, d;
         asm volatile( "rdtsc\n\t" : "=a" (a), "=d" (d) );
         return (d << 32) | (a & 0xffffffff);
@@ -13,11 +13,11 @@ static inline uint64_t read_time(void)
         uint64_t l;
         asm volatile( "rdtsc\n\t" : "=A" (l) );
         return l;
-    }   
+    }
 }
- 
+
 #define NOP_CYCLES 65 // time measured by an empty timer on Core2
- 
+
 #define START_TIMER \
 uint64_t tend;\
 uint64_t tstart= read_time();
@@ -37,5 +37,5 @@ tend= read_time();\
     }else\
         tskip_count++;\
     if(((tcount+tskip_count) & (tcount+tskip_count-1)) == 0)\
-        fprintf(logfile, "%llu dezicycles in %s, %d runs, %d skips\n", tsum*10/tcount-NOP_CYCLES*10, id, tcount, tskip_count);\
+        fprintf(stderr, "%llu dezicycles in %s, %d runs, %d skips\n", tsum*10/tcount-NOP_CYCLES*10, id, tcount, tskip_count);\
 }}}

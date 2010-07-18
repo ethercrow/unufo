@@ -40,6 +40,7 @@
 #include "unufo_patch.h"
 #include "unufo_pixel.h"
 #include "unufo_types.h"
+#include "unufo_utils.h"
 
 using namespace std;
 using namespace unufo;
@@ -48,8 +49,6 @@ using namespace unufo;
 MAIN()
 
 /* Helpers for the main function */
-static FILE* logfile;
-
 static int input_bytes;
 static int comp_patch_radius;
 
@@ -128,10 +127,6 @@ static inline bool try_point(const Coordinates& candidate,
                              Coordinates& best_point,
                              vector<int>& best_color_diff)
 {
-#ifndef NDEBUG
-    fprintf(logfile, "%s begin\n", __func__);
-    fflush(logfile);
-#endif
     int difference;
     if (max_adjustment)
         difference = get_difference_color_adjustment(data,
@@ -143,10 +138,6 @@ static inline bool try_point(const Coordinates& candidate,
             transfer_belief, comp_patch_radius,
             candidate, position, best);
 
-#ifndef NDEBUG
-    fprintf(logfile, "%s end\n", __func__);
-    fflush(logfile);
-#endif
     if (best <= difference)
         return false;
     best = difference;
@@ -160,10 +151,6 @@ public:
     refine_callable(int n, const Coordinates& position): n_{n}, position_{position}{}
 
     Coordinates operator()() {
-#ifndef NDEBUG
-    fprintf(logfile, "%s begin for (%d, %d)\n", __func__, position_.x, position_.y);
-    fflush(logfile);
-#endif
         // thread local vars
         int tl_best{INT_MAX};
         Coordinates tl_best_point;
@@ -195,10 +182,7 @@ public:
                 try_point(Coordinates(x, y), position_, tl_best, tl_best_point, tl_best_color_diff);
             }
         }
-#ifndef NDEBUG
-    fprintf(logfile, "%s returning (%d, %d)\n", __func__, tl_best_point.x, tl_best_point.y);
-    fflush(logfile);
-#endif
+
         return tl_best_point;
     }
 private:
@@ -218,7 +202,6 @@ static void run(const gchar*,
     Parameters parameters;
     GimpDrawable *drawable, *corpus_drawable, *ref_drawable;
 
-    logfile = fopen(LOG_FILE, "wt");
     int64_t perf_overall          = 0;
     int64_t perf_random_search    = 0;
     int64_t perf_refinement       = 0;
@@ -246,7 +229,7 @@ static void run(const gchar*,
     values[0].data.d_status = GIMP_PDB_SUCCESS;
 
     if (!get_parameters_from_list(&parameters, nparams, param)) {
-        fprintf(logfile, "get_parameters_from_list failed\n");
+        UNUFO_LOG("get_parameters_from_list failed\n")
         values[0].data.d_status = GIMP_PDB_EXECUTION_ERROR;
         return;
     }
@@ -334,7 +317,7 @@ static void run(const gchar*,
                 }
     }
 
-    fprintf(logfile, "gimp setup dragons end\n");
+    UNUFO_LOG("gimp setup dragons end\n")
     //////////////////////////////
     // Gimp setup dragons END
     //////////////////////////////
@@ -368,11 +351,10 @@ static void run(const gchar*,
     int total_points = data_points.size();
     vector<Coordinates> data_points_backup(data_points);
 
-    fprintf(logfile, "status  dimensions: (%d, %d)\n", confidence_map.width, confidence_map.height);
-    fprintf(logfile, "data dimensions: (%d, %d)\n", data.width, data.height);
-    fprintf(logfile, "ref_layer dimensions: (%d, %d, %d, %d)\n", sel_x1, sel_y1, sel_x2-sel_x1, sel_y2-sel_y1);
-    fprintf(logfile, "total points to be filled: %d\n", total_points);
-    fflush(logfile);
+    UNUFO_LOG("status  dimensions: (%d, %d)\n", confidence_map.width, confidence_map.height)
+    UNUFO_LOG("data dimensions: (%d, %d)\n", data.width, data.height)
+    UNUFO_LOG("ref_layer dimensions: (%d, %d, %d, %d)\n", sel_x1, sel_y1, sel_x2-sel_x1, sel_y2-sel_y1)
+    UNUFO_LOG("total points to be filled: %d\n", total_points)
 
     int points_to_go = total_points;
     while (points_to_go > 0) {
@@ -405,9 +387,15 @@ static void run(const gchar*,
             best = INT_MAX;
             best_color_diff.assign(input_bytes, 0);
 
+            clock_gettime(CLOCK_REALTIME, &perf_tmp);
+            perf_random_search -= perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
+
             refine_callable refiner(parameters.tries, position);
             Coordinates cand = refiner();
             try_point(cand, position, best, best_point, best_color_diff);
+
+            clock_gettime(CLOCK_REALTIME, &perf_tmp);
+            perf_random_search += perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
 
             START_TIMER
             transfer_patch(data, input_bytes,
@@ -581,14 +569,13 @@ static void run(const gchar*,
     clock_gettime(CLOCK_REALTIME, &perf_tmp);
     perf_overall += perf_tmp.tv_nsec + 1000000000LL*perf_tmp.tv_sec;
 
-    fprintf(logfile, "\n%d points left unfilled\n", points_to_go);
-    fprintf(logfile, "populating edge_points took %lld usec\n", perf_edge_points/1000);
-    fprintf(logfile, "random search took %lld usec\n", perf_random_search/1000);
-    fprintf(logfile, "refinement took %lld usec\n", perf_refinement/1000);
-    fprintf(logfile, "early converge count: %d\n", converge_count);
-    fprintf(logfile, "updating undo stack took %lld usec\n", perf_fill_undo/1000);
-    fprintf(logfile, "overall time: %lld usec\n", perf_overall/1000);
-    fclose(logfile);
+    UNUFO_LOG("\n%d points left unfilled\n", points_to_go)
+    UNUFO_LOG("populating edge_points took %lld usec\n", perf_edge_points/1000)
+    UNUFO_LOG("random search took %lld usec\n", perf_random_search/1000)
+    UNUFO_LOG("refinement took %lld usec\n", perf_refinement/1000)
+    UNUFO_LOG("early converge count: %d\n", converge_count)
+    UNUFO_LOG("updating undo stack took %lld usec\n", perf_fill_undo/1000)
+    UNUFO_LOG("overall time: %lld usec\n", perf_overall/1000)
 
     /* Write result back to the GIMP, clean up */
 
